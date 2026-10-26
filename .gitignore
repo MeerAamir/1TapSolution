@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+
+# builds
+dist/
+*.tsbuildinfo
+.wrangler/
+
+# environment (never commit secrets)
+.env
+.env.*
+!.env.example
+.dev.vars
+
+# tests
+test-results/
+playwright-report/
+tests/e2e/.stack.json
+coverage/
+
+# editors / OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log

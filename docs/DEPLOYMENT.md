@@ -1,0 +1,167 @@
+# Deployment
+
+Target: **Supabase** (database, auth, storage) + **Cloudflare Pages** (website and edge functions), both on free tiers.
+
+You need: a GitHub account with this repository, a Supabase account, and a Cloudflare account. Allow about 30 minutes.
+
+---
+
+## 0. Decide the final domain first
+
+Every printed QR code contains `https://<your-domain>/q/<code>`. Choose the domain you will keep (for example `qr.yourbrand.com`) **before printing any codes**. You can start on the free `*.pages.dev` address for testing, but codes downloaded while `VITE_PUBLIC_APP_URL` points there will keep pointing there.
+
+If you ever move to a new domain, keep the old one connected to the same Cloudflare project so already-printed codes keep working.
+
+## 1. Create the Supabase project
+
+1. In the Supabase dashboard, create a new project. Pick the region closest to most visitors and save the database password somewhere safe.
+2. Open **Project Settings → API** (API Keys) and note:
+   - the **Project URL** (`https://<ref>.supabase.co`)
+   - the **publishable key** (`sb_publishable_…`) or, on older projects, the legacy **anon** key. This one is safe to expose.
+   - Do **not** copy the secret or service-role key into any configuration.
+
+## 2. Apply the database migrations
+
+**Option A: SQL Editor (no tools needed).** Open **SQL Editor**, then paste and run each file **in order**:
+
+1. `supabase/migrations/20261026000001_core_schema.sql`
+2. `supabase/migrations/20261026000002_security.sql`
+3. `supabase/migrations/20261026000003_rpc.sql`
+4. `supabase/migrations/20261026000004_storage.sql`
+5. `supabase/migrations/20261026000005_admin_writes.sql`
+6. *(optional demo data)* `supabase/seed.sql`
+
+**Option B: Supabase CLI.**
+
+```bash
+npx supabase login
+npx supabase link --project-ref <your-project-ref>
+npx supabase db push            # applies supabase/migrations in order
+# then run supabase/seed.sql in the SQL Editor if you want demo data
+```
+
+## 3. Create the edge ingest secret
+
+The edge functions prove to the database that a scan or contact message really came from your site using a shared secret.
+
+```bash
+openssl rand -base64 48        # or any password manager's 48+ character generator
+```
+
+In the **SQL Editor**, run (replace the value):
+
+```sql
+select public.set_edge_ingest_secret('PASTE-THE-SECRET-HERE');
+```
+
+Keep the same value for step 6. Only a hash is stored in the database.
+
+## 4. Configure authentication
+
+In **Authentication**:
+
+1. **Sign In / Providers → Email**: keep Email enabled and **turn off "Allow new users to sign up"**.
+2. **URL Configuration**:
+   - **Site URL**: `https://<your-domain>`
+   - **Redirect URLs**: `https://<your-domain>/reset-password` (add `http://localhost:5173/reset-password` for local development)
+3. **Emails**: Supabase's built-in email sender is rate-limited and meant for testing. For reliable password-reset emails in production, configure custom SMTP under **Authentication → Emails → SMTP settings**.
+
+Then create the first administrator: follow [ADMIN_SETUP.md](ADMIN_SETUP.md).
+
+## 5. Storage
+
+The storage migration created two buckets:
+
+- `public-files`: public read by exact URL, 10 MB limit, PDF/PNG/JPEG/WebP/GIF only.
+- `private-files`: administrators only.
+
+Check under **Storage** that both exist. To raise the 10 MB limit (the Free plan allows up to 50 MB per file), change it on both buckets and set `VITE_MAX_UPLOAD_MB` to match.
+
+## 6. Deploy to Cloudflare Pages
+
+1. In Cloudflare, go to **Workers & Pages → Create → Pages → Connect to Git** and choose this repository.
+2. Build settings:
+   - Framework preset: **None**
+   - Build command: `npm run build`
+   - Build output directory: `dist`
+   - Root directory: *(leave empty)*
+3. **Environment variables (Production)**. Use the same values for Preview if you deploy previews.
+
+   | Name | Value | Type |
+   | --- | --- | --- |
+   | `NODE_VERSION` | `22` | Plain text |
+   | `VITE_SUPABASE_URL` | `https://<ref>.supabase.co` | Plain text |
+   | `VITE_SUPABASE_ANON_KEY` | publishable (or legacy anon) key | Plain text |
+   | `VITE_PUBLIC_APP_URL` | `https://<your-domain>` (no trailing slash) | Plain text |
+   | `VITE_CONTACT_EMAIL` / `VITE_CONTACT_PHONE` / `VITE_CONTACT_WHATSAPP` | your public contact details, or leave unset | Plain text |
+   | `SUPABASE_URL` | same as `VITE_SUPABASE_URL` | Plain text |
+   | `SUPABASE_ANON_KEY` | same as `VITE_SUPABASE_ANON_KEY` | Plain text |
+   | `EDGE_INGEST_SECRET` | the secret from step 3 | **Encrypt** |
+   | `VISITOR_HASH_SECRET` | another random 48+ character value (optional) | **Encrypt** |
+
+4. **Save and Deploy.** Cloudflare builds the site and picks up the `functions/` folder automatically. `public/_routes.json` limits Functions to `/q/*` and `/api/*`, so everything else is static and free.
+5. `VITE_*` values are baked in at build time. After changing one, use **Deployments → Retry deployment** to rebuild.
+
+## 7. Verify
+
+Open your site, then check:
+
+- `https://<domain>/` loads the home page, and the demo QR in the hero opens `/q/demoCafe01` (needs the seed).
+- `https://<domain>/q/demoStoreIG` redirects to Instagram, which proves the edge function is running.
+- `https://<domain>/q/doesNotExist` shows "not recognised".
+- `/login`: sign in with the administrator. The overview loads.
+- Scan a demo code with a phone, then refresh **Analytics**: one scan appears. If not, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
+Run these in the **SQL Editor**. Each should return `false`:
+
+```sql
+select has_function_privilege('anon', 'public.set_edge_ingest_secret(text)', 'execute');
+select has_function_privilege('anon', 'public.admin_overview_stats(boolean)', 'execute');
+select has_table_privilege('anon', 'public.businesses', 'select');
+select has_table_privilege('authenticated', 'public.admin_users', 'insert');
+```
+
+## 8. Demo PDFs (optional)
+
+The SQL seed cannot upload files. To add the demo café menu and school brochure (and their QR codes `demoMenu01` and `demoBrochure`), run this once from your own computer:
+
+```bash
+SUPABASE_URL=https://<ref>.supabase.co \
+SUPABASE_SERVICE_ROLE_KEY=<secret key, sb_secret_… or legacy service_role> \
+npm run seed:files
+```
+
+The key stays in your terminal session. Do not save it anywhere.
+
+## 9. Scheduled privacy clean-up
+
+Enable **Database → Extensions → pg_cron**, then run once in the SQL Editor:
+
+```sql
+select cron.schedule('prune-scan-identifiers', '15 3 * * *', $$select public.prune_scan_identifiers(90)$$);
+```
+
+This removes visitor hashes older than 90 days and contact-form hashes older than 30 days. Scan counts are kept.
+
+## 10. Custom domain (now or later)
+
+1. Cloudflare Pages project → **Custom domains → Set up a domain**. Enter `qr.yourbrand.com` and follow the DNS instructions. If the domain's DNS is already on Cloudflare, it is configured automatically; otherwise add the CNAME record shown.
+2. Wait for the certificate to become active.
+3. Update `VITE_PUBLIC_APP_URL` to the new domain and redeploy.
+4. Update the Supabase **Site URL** and **Redirect URLs** (step 4).
+5. Keep any old domain attached if codes using it were already printed.
+
+## Free-tier limits (checked October 2026)
+
+| Service | Free plan | What it means here |
+| --- | --- | --- |
+| Supabase | 500 MB database, 1 GB file storage, 50 MB max file, 5 GB egress, 50,000 monthly active users, 2 active projects. **Projects are paused after 1 week of inactivity.** | Plenty for many businesses' text and scan events. PDFs and images use the 1 GB. Pausing is the main risk for a commercial client: regular QR traffic usually keeps a project active, but a paid plan removes pausing and adds backups. |
+| Cloudflare Pages | Static requests free and unlimited. Functions share the Workers Free quota of **100,000 requests a day** (resets at midnight UTC). | Each QR scan and contact message is one function request. Static pages are not counted. |
+
+Sources: [Supabase pricing](https://supabase.com/pricing), [Cloudflare Pages Functions pricing](https://developers.cloudflare.com/pages/functions/pricing/), [Vercel fair use (why not Vercel Hobby)](https://vercel.com/docs/limits/fair-use-guidelines).
+
+**When to upgrade:** if scans regularly approach 100,000 a day, move Cloudflare to Workers Paid. Before relying on the platform for paying clients, move Supabase to a paid plan for no pausing and daily backups.
+
+## Updating the site
+
+Push to the main branch. Cloudflare rebuilds automatically. Database changes ship as new files in `supabase/migrations/`, applied with step 2 before (or with) the code that needs them.
