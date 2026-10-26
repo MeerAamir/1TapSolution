@@ -20,6 +20,8 @@
 | `contact_submissions` | none | none | read, update, delete | insert via `submit_contact_form` + secret | Rate-limited |
 | `audit_logs` | none | none | read | none | Written by triggers only |
 | `app_secrets` | none | none | none | none | Hash only |
+| `app_heartbeat` | only via `keep_alive()` (bumps one counter, at most once a minute) | same | read via `admin_usage()` | n/a | Keeps the Free project active |
+| `qr_scan_daily` | none | none | read | n/a | Daily totals for scans older than 90 days |
 | Storage `public-files` | read by exact URL (no listing) | same | upload, replace, delete | none | PDF, PNG, JPEG, WebP, GIF; 10 MB |
 | Storage `private-files` | none | none | full, signed URLs for viewing | none | Never linkable from public pages |
 
@@ -38,18 +40,18 @@
 
 ## Privacy
 
-- No IP addresses are stored anywhere. Visitor hashes rotate daily and are cleared after 90 days. Contact hashes are cleared after 30 days (`prune_scan_identifiers`, scheduled with pg_cron).
+- No IP addresses are stored anywhere. Visitor hashes rotate daily. Scan events older than 90 days are combined into daily totals and deleted, hashes included. Contact hashes are cleared after 30 days. This runs automatically once a day from the keep-alive (`compact_scan_events`).
 - No cookies are set for visitors. The only browser storage is the administrator's Supabase session.
 
 ## Deployment security checklist
 
 - [ ] Supabase → Authentication: **public sign-ups disabled**.
 - [ ] Supabase → Authentication → URL configuration: Site URL and redirect URLs set to the production domain only.
-- [ ] All five migrations applied. The security test queries in `DEPLOYMENT.md` § 7 return the expected results.
+- [ ] All six migrations applied. The security test queries in `DEPLOYMENT.md` § 7 return the expected results.
 - [ ] Ingest secret set in the database (`set_edge_ingest_secret`) **and** in Cloudflare as an encrypted variable, with exactly the same value. At least 32 random characters.
 - [ ] No service-role or secret key in Cloudflare variables, `.env` files or the repository.
 - [ ] `VITE_PUBLIC_APP_URL` is the final HTTPS domain.
 - [ ] Administrators use unique, long passwords. Remove access for people who leave by deleting their `admin_users` row.
-- [ ] pg_cron job for `prune_scan_identifiers` scheduled.
+- [ ] Keep-alive Worker deployed (dashboard shows "Keep-alive: last ran" within 6 hours).
 - [ ] Supabase backups understood: the Free plan has no point-in-time recovery. Export data regularly, or move to a paid plan before relying on it commercially.
 - [ ] Legal drafts (`/privacy`, `/terms`) reviewed by a qualified adviser and completed with company details.

@@ -29,7 +29,8 @@ If you ever move to a new domain, keep the old one connected to the same Cloudfl
 3. `supabase/migrations/20261026000003_rpc.sql`
 4. `supabase/migrations/20261026000004_storage.sql`
 5. `supabase/migrations/20261026000005_admin_writes.sql`
-6. *(optional demo data)* `supabase/seed.sql`
+6. `supabase/migrations/20261026000006_free_tier_guards.sql`
+7. *(optional demo data)* `supabase/seed.sql`
 
 **Option B: Supabase CLI.**
 
@@ -64,7 +65,7 @@ In **Authentication**:
 2. **URL Configuration**:
    - **Site URL**: `https://<your-domain>`
    - **Redirect URLs**: `https://<your-domain>/reset-password` (add `http://localhost:5173/reset-password` for local development)
-3. **Emails**: Supabase's built-in email sender is rate-limited and meant for testing. For reliable password-reset emails in production, configure custom SMTP under **Authentication → Emails → SMTP settings**.
+3. **Emails**: Supabase's built-in sender only delivers 2 emails an hour, and only to your Supabase team members. Connect a free SMTP provider for password resets: see [FREE_HOSTING.md](FREE_HOSTING.md) § 3.
 
 Then create the first administrator: follow [ADMIN_SETUP.md](ADMIN_SETUP.md).
 
@@ -98,6 +99,7 @@ Check under **Storage** that both exist. To raise the 10 MB limit (the Free plan
    | `SUPABASE_ANON_KEY` | same as `VITE_SUPABASE_ANON_KEY` | Plain text |
    | `EDGE_INGEST_SECRET` | the secret from step 3 | **Encrypt** |
    | `VISITOR_HASH_SECRET` | another random 48+ character value (optional) | **Encrypt** |
+   | `FILE_PROXY` and `VITE_FILE_PROXY` | `on` to serve files through Cloudflare's cache (optional, see FREE_HOSTING.md § 4) | Plain text |
 
 4. **Save and Deploy.** Cloudflare builds the site and picks up the `functions/` folder automatically. `public/_routes.json` limits Functions to `/q/*` and `/api/*`, so everything else is static and free.
 5. `VITE_*` values are baked in at build time. After changing one, use **Deployments → Retry deployment** to rebuild.
@@ -133,15 +135,9 @@ npm run seed:files
 
 The key stays in your terminal session. Do not save it anywhere.
 
-## 9. Scheduled privacy clean-up
+## 9. Keep it running for free (required)
 
-Enable **Database → Extensions → pg_cron**, then run once in the SQL Editor:
-
-```sql
-select cron.schedule('prune-scan-identifiers', '15 3 * * *', $$select public.prune_scan_identifiers(90)$$);
-```
-
-This removes visitor hashes older than 90 days and contact-form hashes older than 30 days. Scan counts are kept.
+Supabase pauses Free projects after about a week without database activity. Deploy the free keep-alive Worker and set up free email and backups: follow [FREE_HOSTING.md](FREE_HOSTING.md). It takes about 20 minutes, once. The same keep-alive also runs the daily clean-up (old scans are combined into daily totals, and visitor and contact hashes are removed), so no database scheduler is needed.
 
 ## 10. Custom domain (now or later)
 
@@ -151,16 +147,11 @@ This removes visitor hashes older than 90 days and contact-form hashes older tha
 4. Update the Supabase **Site URL** and **Redirect URLs** (step 4).
 5. Keep any old domain attached if codes using it were already printed.
 
-## Free-tier limits (checked October 2026)
+## Free-tier limits
 
-| Service | Free plan | What it means here |
-| --- | --- | --- |
-| Supabase | 500 MB database, 1 GB file storage, 50 MB max file, 5 GB egress, 50,000 monthly active users, 2 active projects. **Projects are paused after 1 week of inactivity.** | Plenty for many businesses' text and scan events. PDFs and images use the 1 GB. Pausing is the main risk for a commercial client: regular QR traffic usually keeps a project active, but a paid plan removes pausing and adds backups. |
-| Cloudflare Pages | Static requests free and unlimited. Functions share the Workers Free quota of **100,000 requests a day** (resets at midnight UTC). | Each QR scan and contact message is one function request. Static pages are not counted. |
+Every free limit, what happens if it is reached, and how the project guards against it are in [FREE_HOSTING.md](FREE_HOSTING.md).
 
-Sources: [Supabase pricing](https://supabase.com/pricing), [Cloudflare Pages Functions pricing](https://developers.cloudflare.com/pages/functions/pricing/), [Vercel fair use (why not Vercel Hobby)](https://vercel.com/docs/limits/fair-use-guidelines).
-
-**When to upgrade:** if scans regularly approach 100,000 a day, move Cloudflare to Workers Paid. Before relying on the platform for paying clients, move Supabase to a paid plan for no pausing and daily backups.
+Sources: [Supabase pricing](https://supabase.com/pricing), [Supabase billing FAQ](https://supabase.com/docs/guides/platform/billing-faq), [Cloudflare Pages Functions pricing](https://developers.cloudflare.com/pages/functions/pricing/), [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/), [Vercel fair use (why not Vercel Hobby)](https://vercel.com/docs/limits/fair-use-guidelines).
 
 ## Updating the site
 

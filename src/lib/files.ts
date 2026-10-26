@@ -38,19 +38,107 @@ export interface ValidatedFile {
   ext: string
 }
 
+/** Photos may be larger before compression; the size limit applies to the optimised result. */
+const MAX_IMAGE_SOURCE_BYTES = 25 * 1024 * 1024
+
 export async function validateUpload(file: File, opts: { imagesOnly?: boolean } = {}): Promise<ValidatedFile> {
   const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
   const allowed = ALLOWED[ext]
   if (!allowed) throw new Error('Only PDF, PNG, JPG, WebP and GIF files can be uploaded.')
-  const maxBytes = config.maxUploadMb * 1024 * 1024
   if (file.size === 0) throw new Error('This file is empty.')
-  if (file.size > maxBytes) throw new Error(`This file is larger than ${config.maxUploadMb} MB.`)
   const head = new Uint8Array(await file.slice(0, 16).arrayBuffer())
   const sniffed = sniffMime(head)
   if (!sniffed) throw new Error('The file content is not a valid PDF or image.')
   if (sniffed !== allowed.mime) throw new Error(`The file extension .${ext} does not match its content.`)
   if (opts.imagesOnly && sniffed === 'application/pdf') throw new Error('Choose an image file (PNG, JPG or WebP).')
+  const compressible = sniffed !== 'application/pdf' && sniffed !== 'image/gif'
+  const maxBytes = compressible ? Math.max(MAX_IMAGE_SOURCE_BYTES, maxUploadBytes()) : maxUploadBytes()
+  if (file.size > maxBytes) throw new Error(`This file is larger than ${Math.round(maxBytes / 1048576)} MB.`)
   return { file, mime: sniffed, ext: allowed.ext }
+}
+
+function maxUploadBytes(): number {
+  return config.maxUploadMb * 1024 * 1024
+}
+
+/** Validates, optimises images, then enforces the final size limit. */
+export async function prepareUpload(file: File, opts: { imagesOnly?: boolean } = {}): Promise<ValidatedFile> {
+  const v = await optimizeImage(await validateUpload(file, opts))
+  if (v.file.size > maxUploadBytes()) {
+    throw new Error(`This file is larger than ${config.maxUploadMb} MB${v.mime.startsWith('image/') ? ' even after compression' : ''}.`)
+  }
+  return v
+}
+
+/** Longest side of uploaded photos after optimisation, in pixels. */
+const MAX_IMAGE_SIDE = 1920
+/** PDFs above this size get a warning: slow on mobile data and costly in bandwidth. */
+export const LARGE_PDF_BYTES = 3 * 1024 * 1024
+
+async function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob | null> {
+  return new Promise((resolve) => canvas.toBlob(resolve, type, quality))
+}
+
+/**
+ * Shrinks large photos before upload (longest side 1920 px, re-encoded).
+ * Saves storage and bandwidth on the free plans and makes pages load faster on
+ * phones. PNGs stay PNG (keeps transparency for logos); JPEG/WebP become JPEG.
+ * Animated GIFs and already-small images are left untouched. Never returns a
+ * larger file than the original.
+ */
+export async function optimizeImage(v: ValidatedFile): Promise<ValidatedFile> {
+  if (!v.mime.startsWith('image/') || v.mime === 'image/gif') return v
+  if (typeof document === 'undefined' || typeof createImageBitmap !== 'function') return v
+  let bitmap: ImageBitmap
+  try {
+    bitmap = await createImageBitmap(v.file)
+  } catch {
+    return v
+  }
+  const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(bitmap.width, bitmap.height))
+  if (scale === 1 && v.file.size < 300 * 1024) {
+    bitmap.close()
+    return v
+  }
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(bitmap.width * scale)
+  canvas.height = Math.round(bitmap.height * scale)
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    bitmap.close()
+    return v
+  }
+  const keepPng = v.mime === 'image/png'
+  if (!keepPng) {
+    ctx.fillStyle = '#FFFFFF' // JPEG has no transparency
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+  }
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+  bitmap.close()
+  let asPng = keepPng
+  let blob = await canvasToBlob(canvas, keepPng ? 'image/png' : 'image/jpeg', keepPng ? undefined : 0.82)
+  // Large PNG photos/screenshots without transparency are much smaller as JPEG.
+  if (keepPng && blob && blob.size > 1024 * 1024 && isOpaque(ctx, canvas.width, canvas.height)) {
+    const jpeg = await canvasToBlob(canvas, 'image/jpeg', 0.82)
+    if (jpeg && jpeg.size < blob.size) {
+      blob = jpeg
+      asPng = false
+    }
+  }
+  if (!blob || blob.size >= v.file.size) return v
+  const mime = asPng ? 'image/png' : 'image/jpeg'
+  const ext = asPng ? 'png' : 'jpg'
+  const name = v.file.name.replace(/\.[^.]+$/, '') + '.' + ext
+  return { file: new File([blob], name, { type: mime }), mime, ext }
+}
+
+function isOpaque(ctx: CanvasRenderingContext2D, width: number, height: number): boolean {
+  const data = ctx.getImageData(0, 0, width, height).data
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] < 255) return false
+  }
+  return true
 }
 
 function storagePath(businessId: string | null, ext: string): string {
@@ -59,9 +147,11 @@ function storagePath(businessId: string | null, ext: string): string {
 
 async function uploadObject(bucket: FileBucket, path: string, v: ValidatedFile, onProgress?: (pct: number) => void) {
   onProgress?.(10)
+  // Every upload gets a new random path, so the object never changes: let
+  // browsers and the CDN cache it for a year (saves bandwidth on free plans).
   const { error } = await getSupabase().storage.from(bucket).upload(path, v.file, {
     contentType: v.mime,
-    cacheControl: '3600',
+    cacheControl: '31536000',
     upsert: false,
   })
   if (error) throw new Error(error.message)
@@ -84,7 +174,7 @@ export async function uploadFile(
     onProgress?: (pct: number) => void
   },
 ): Promise<FileRecord> {
-  const v = await validateUpload(file, { imagesOnly: opts.imagesOnly })
+  const v = await prepareUpload(file, { imagesOnly: opts.imagesOnly })
   const bucket = opts.bucket ?? 'public-files'
   const path = storagePath(opts.businessId, v.ext)
   await uploadObject(bucket, path, v, opts.onProgress)
@@ -98,7 +188,7 @@ export async function uploadFile(
       description: opts.description?.trim() || null,
       original_filename: file.name.slice(0, 255),
       mime_type: v.mime,
-      size_bytes: file.size,
+      size_bytes: v.file.size,
       show_on_profile: opts.showOnProfile ?? false,
     })
     .select()
@@ -116,7 +206,7 @@ export async function uploadFile(
  * removed only after the database points to the new one.
  */
 export async function replaceFile(record: FileRecord, file: File, onProgress?: (pct: number) => void): Promise<FileRecord> {
-  const v = await validateUpload(file, { imagesOnly: record.kind === 'image' })
+  const v = await prepareUpload(file, { imagesOnly: record.kind === 'image' })
   if ((v.mime === 'application/pdf') !== (record.kind === 'document')) {
     throw new Error(record.kind === 'document' ? 'Replace a document with another PDF.' : 'Replace an image with another image.')
   }
@@ -127,7 +217,7 @@ export async function replaceFile(record: FileRecord, file: File, onProgress?: (
     .update({
       storage_path: path,
       mime_type: v.mime,
-      size_bytes: file.size,
+      size_bytes: v.file.size,
       original_filename: file.name.slice(0, 255),
       version: record.version + 1,
     })

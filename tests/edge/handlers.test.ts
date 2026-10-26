@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
+import { handleFileRequest } from '@/lib/edge/files'
 import { handleContactRequest, handleQrRequest, injectPayload, redirectTarget, type EdgeEnv, type QrPayload } from '@/lib/edge/handlers'
 
 const ENV: EdgeEnv = {
@@ -185,5 +186,73 @@ describe('Supabase key headers', () => {
     const { supabaseKeyHeaders } = await import('@/lib/edge/supabase-headers')
     expect(supabaseKeyHeaders('sb_publishable_abc')).toEqual({ apikey: 'sb_publishable_abc' })
     expect(supabaseKeyHeaders('eyJhbGciOi.x.y')).toEqual({ apikey: 'eyJhbGciOi.x.y', Authorization: 'Bearer eyJhbGciOi.x.y' })
+  })
+})
+
+describe('GET /f/:path cached file delivery', () => {
+  function memoryCache() {
+    const store = new Map<string, Response>()
+    return {
+      store,
+      async match(r: Request) {
+        const hit = store.get(r.url)
+        return hit ? hit.clone() : undefined
+      },
+      async put(r: Request, res: Response) {
+        store.set(r.url, res.clone())
+      },
+    }
+  }
+  const PDF = Buffer.from('%PDF-1.4 test')
+  const path = 'biz-1/abc-123.pdf'
+
+  it('fetches from Supabase once, then serves from cache', async () => {
+    const cache = memoryCache()
+    const origin = vi.fn(async () => new Response(PDF, { status: 200, headers: { 'Content-Length': String(PDF.length) } }))
+    const pending: Array<Promise<unknown>> = []
+    const req = () => new Request(`https://1tap.example/f/${path}?v=2`)
+
+    const first = await handleFileRequest(req(), path, ENV, cache, (p) => pending.push(p), origin as unknown as typeof fetch)
+    await Promise.all(pending)
+    expect(first.status).toBe(200)
+    expect(first.headers.get('Content-Type')).toBe('application/pdf')
+    expect(first.headers.get('Cache-Control')).toContain('immutable')
+    expect(Buffer.from(await first.arrayBuffer()).toString()).toBe('%PDF-1.4 test')
+
+    const second = await handleFileRequest(req(), path, ENV, cache, (p) => pending.push(p), origin as unknown as typeof fetch)
+    expect(Buffer.from(await second.arrayBuffer()).toString()).toBe('%PDF-1.4 test')
+    expect(origin).toHaveBeenCalledTimes(1)
+    expect(origin).toHaveBeenCalledWith(`https://proj.supabase.co/storage/v1/object/public/public-files/${path}`)
+  })
+
+  it('adds a safe download filename on request', async () => {
+    const origin = vi.fn(async () => new Response(PDF, { status: 200 }))
+    const res = await handleFileRequest(
+      new Request(`https://1tap.example/f/${path}?download=Menu%22%3B%20evil.exe`),
+      path,
+      ENV,
+      null,
+      undefined,
+      origin as unknown as typeof fetch,
+    )
+    expect(res.headers.get('Content-Disposition')).toBe('attachment; filename="Menu evil.exe.pdf"')
+  })
+
+  it('rejects anything that is not a public storage path', async () => {
+    const origin = vi.fn()
+    for (const bad of ['../secret.pdf', 'a/b/c.pdf', 'a/b.svg', 'A/B.pdf', 'a/b.html']) {
+      const res = await handleFileRequest(new Request(`https://1tap.example/f/${bad}`), bad, ENV, null, undefined, origin as unknown as typeof fetch)
+      expect(res.status, bad).toBe(404)
+    }
+    expect(origin).not.toHaveBeenCalled()
+  })
+
+  it('direct-open documents use the cached path when enabled', async () => {
+    const { fetchImpl } = fakeSupabase({
+      state: 'ok', code: 'docCode12', type: 'document',
+      destination: { open_mode: 'direct', file: { path: 'biz/abc-123.pdf', version: 3 } },
+    })
+    const res = await handleQrRequest(request('/q/docCode12'), 'docCode12', { ...ENV, FILE_PROXY: 'on' }, async () => INDEX, fetchImpl)
+    expect(res.headers.get('Location')).toBe('https://1tap.example/f/biz/abc-123.pdf?v=3')
   })
 })

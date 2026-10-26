@@ -8,12 +8,12 @@
 - [ ] Public contact details (`VITE_CONTACT_*`) set, or intentionally left empty.
 
 **Supabase**
-- [ ] All five migrations applied; verification queries in `DEPLOYMENT.md` § 7 return `false`.
+- [ ] All six migrations applied; verification queries in `DEPLOYMENT.md` § 7 return `false`.
 - [ ] Public sign-ups disabled; Site URL and Redirect URLs point to the final domain.
-- [ ] Custom SMTP configured for password-reset emails.
+- [ ] Free SMTP (Brevo) connected for password-reset emails.
 - [ ] Ingest secret set in the database and Cloudflare (same value).
-- [ ] pg_cron clean-up job scheduled.
-- [ ] Decision made about the plan: Free projects pause after a week of inactivity and have no point-in-time backups.
+- [ ] **Keep-alive Worker deployed**: Settings → Free plan usage shows "Keep-alive: last ran" within 6 hours.
+- [ ] GitHub secrets added; a manual run of "Keep-alive and backup" produced a backup artifact.
 
 **Content**
 - [ ] Owner administrator created; test administrator accounts removed.
@@ -29,6 +29,6 @@
 ## After launch
 
 - [ ] Watch Cloudflare's Functions request count (Workers & Pages → Analytics) and Supabase usage (Reports).
-- [ ] Export important data regularly if staying on the Free plan.
+- [ ] Once a month: the two-minute check in `FREE_HOSTING.md`.
 - [ ] Review the audit log occasionally.
 - [ ] Keep dependencies updated: `npm outdated`, then run `npm test`, `npm run test:db` and `npm run build` before deploying.

@@ -65,10 +65,16 @@ export function businessPublicUrl(slug: string): string {
   return `${config.publicAppUrl}/b/${encodeURIComponent(slug)}`
 }
 
+/**
+ * Public file URL. With VITE_FILE_PROXY=on, files are served from this site's
+ * /f/ path through Cloudflare's cache (saves Supabase bandwidth); otherwise
+ * directly from Supabase Storage.
+ */
 export function storagePublicUrl(path: string, version?: number): string {
-  const base = `${config.supabaseUrl}/storage/v1/object/public/public-files/${path
-    .split('/')
-    .map(encodeURIComponent)
-    .join('/')}`
+  const encoded = path.split('/').map(encodeURIComponent).join('/')
+  const base =
+    import.meta.env.VITE_FILE_PROXY === 'on'
+      ? `${config.publicAppUrl}/f/${encoded}`
+      : `${config.supabaseUrl}/storage/v1/object/public/public-files/${encoded}`
   return version ? `${base}?v=${version}` : base
 }

@@ -183,3 +183,19 @@ describe('misc', () => {
     ).toBe(false)
   })
 })
+
+describe('free plan usage status', async () => {
+  const { usageStatus } = await import('@/components/admin/UsagePanel')
+  const base = { file_count: 1, raw_scan_rows: 1, daily_scan_rows: 0, heartbeat_source: 'cloudflare-cron' }
+  const now = Date.parse('2026-10-26T12:00:00Z')
+  it('is fine with low usage and a recent heartbeat', () => {
+    const s = usageStatus({ ...base, database_bytes: 50e6, file_bytes: 100e6, last_heartbeat: '2026-10-26T06:00:00Z' }, now)
+    expect(s.level).toBe('ok')
+  })
+  it('warns when the keep-alive has stopped or storage is filling up', () => {
+    expect(usageStatus({ ...base, database_bytes: 50e6, file_bytes: 1e6, last_heartbeat: '2026-10-20T00:00:00Z' }, now).level).toBe('warning')
+    expect(usageStatus({ ...base, database_bytes: 50e6, file_bytes: 1e6, last_heartbeat: null }, now).heartbeatStale).toBe(true)
+    expect(usageStatus({ ...base, database_bytes: 400 * 1048576, file_bytes: 1e6, last_heartbeat: '2026-10-26T06:00:00Z' }, now).level).toBe('warning')
+    expect(usageStatus({ ...base, database_bytes: 1e6, file_bytes: 950 * 1048576, last_heartbeat: '2026-10-26T06:00:00Z' }, now).level).toBe('danger')
+  })
+})

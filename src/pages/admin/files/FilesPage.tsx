@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useFileActions, USAGE_LABEL } from '@/components/admin/FileActions'
+import { warnIfLargePdf } from '@/components/admin/uploadNotices'
 import { Button } from '@/components/ui/button'
 import { Badge, Card, CardHeader, PageHeader, Pagination, SearchInput, Table, Td, Th } from '@/components/ui/data'
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/feedback'
@@ -44,11 +45,12 @@ export default function FilesPage() {
     for (let i = 0; i < arr.length; i++) {
       setProgress({ done: i, total: arr.length, pct: 0 })
       try {
-        await uploadFile(arr[i], {
+        const rec = await uploadFile(arr[i], {
           businessId: uploadBusiness || null,
           bucket: uploadBucket,
           onProgress: (pct) => setProgress({ done: i, total: arr.length, pct }),
         })
+        warnIfLargePdf(rec)
         ok++
       } catch (e) {
         toast.error(`${arr[i].name}: ${friendlyError(e)}`)

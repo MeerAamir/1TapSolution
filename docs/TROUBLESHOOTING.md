@@ -9,7 +9,7 @@ The login exists but has no `admin_users` row. Run the `insert` in [ADMIN_SETUP.
 ### Sign-in fails with "Failed to fetch" or the dashboard cannot load data
 - Check `VITE_SUPABASE_URL` is exactly `https://<ref>.supabase.co`, with no trailing path.
 - The Content-Security-Policy is generated from `VITE_SUPABASE_URL` at build time. If you changed the Supabase URL (for example to a custom domain), rebuild.
-- Free Supabase projects pause after a week of inactivity. Open the Supabase dashboard and **Restore** the project.
+- The Supabase project may be paused (Free projects pause after about a week without database activity). Open the Supabase dashboard and **Restore** it, then check the keep-alive Worker is deployed and its cron trigger is set (`FREE_HOSTING.md` § 1).
 
 ### QR codes open the page but scans are not counted
 - `EDGE_INGEST_SECRET` in Cloudflare must equal the value given to `set_edge_ingest_secret`. If unsure, set a new value in both places.
@@ -37,7 +37,7 @@ The code was deleted, or the link was mistyped. Deleted codes cannot be restored
 A QR code, logo, cover or content block still references it. The dialog lists where. Remove those references, or use **Replace file** instead.
 
 ### Password-reset email never arrives
-Supabase's default email sender is rate-limited. Configure custom SMTP (Authentication → Emails), and check the Redirect URLs include `/reset-password` on your domain.
+Supabase's built-in sender sends only 2 emails an hour, and only to your Supabase team. Connect free Brevo SMTP (`FREE_HOSTING.md` § 3), and check the Redirect URLs include `/reset-password` on your domain.
 
 ### Analytics chart says "Chart unavailable"
 The error message is shown in the chart area. A time-zone error means an unrecognised zone was set in `VITE_ANALYTICS_TIMEZONE`. Use an IANA name such as `Asia/Kolkata`, or leave it empty.
@@ -45,3 +45,9 @@ The error message is shown in the chart area. A time-zone error means an unrecog
 ### Build fails on Cloudflare
 - Set `NODE_VERSION=22`.
 - The build runs strict type checks (`tsc`). Run `npm run build` locally to see the same errors.
+
+### The dashboard says the keep-alive has not run
+Open the keep-alive Worker's URL. It shows what is wrong (for example `database: error 401` means the key is wrong). In Cloudflare, check **Settings → Triggers** has the cron `17 */6 * * *`, and **Settings → Variables** has `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
+
+### An upload says "larger than 10 MB even after compression"
+Photos up to 25 MB are accepted and compressed automatically, but some images (very detailed PNGs with transparency) stay large. Save it as JPEG, or reduce its size, then upload again.

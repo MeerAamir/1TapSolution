@@ -1,0 +1,14 @@
+# Keep-alive Worker: deploy with
+#   npx wrangler deploy --config workers/keepalive/wrangler.toml
+# then set the variables (see worker.js) in the Cloudflare dashboard or with
+#   npx wrangler secret put SUPABASE_ANON_KEY --config workers/keepalive/wrangler.toml
+name = "1tap-keepalive"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+# Every 6 hours, at 17 minutes past (UTC). Free plan allows 5 cron triggers per account.
+[triggers]
+crons = ["17 */6 * * *"]
+
+[observability]
+enabled = true

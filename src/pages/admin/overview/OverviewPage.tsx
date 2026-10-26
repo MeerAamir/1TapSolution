@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ActivityList } from '@/components/admin/ActivityList'
 import { rangeDates } from '@/components/admin/labels'
 import { ChartLegend, ScanChart } from '@/components/admin/ScanChart'
+import { UsageWarning } from '@/components/admin/UsagePanel'
 import { Button } from '@/components/ui/button'
 import { Badge, Card, CardHeader, PageHeader, StatTile, StatusBadge } from '@/components/ui/data'
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/feedback'
@@ -41,6 +42,7 @@ export default function OverviewPage() {
   return (
     <>
       <PageHeader title="Overview" description="Everything happening across your businesses and QR codes." />
+      <UsageWarning />
 
       {isEmpty ? (
         <Card>

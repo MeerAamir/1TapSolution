@@ -9,6 +9,7 @@ import { fileUsage, updateFileMeta } from '@/lib/admin-api'
 import { ACCEPT_IMAGES, deleteFile, replaceFile, signedUrl } from '@/lib/files'
 import { friendlyError } from '@/lib/supabase'
 import type { FileRecord } from '@/lib/types'
+import { warnIfLargePdf } from './uploadNotices'
 
 const USAGE_LABEL: Record<string, string> = {
   qr_code: 'QR code',
@@ -95,6 +96,7 @@ export function useFileActions(onChanged: (f?: FileRecord) => void) {
           try {
             const updated = await replaceFile(target, file)
             toast.success('File replaced. Every QR code and page using it now shows the new version.', { id: t })
+            warnIfLargePdf(updated)
             onChanged(updated)
           } catch (err) {
             toast.error(friendlyError(err), { id: t })

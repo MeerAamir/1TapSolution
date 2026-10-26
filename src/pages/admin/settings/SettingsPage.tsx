@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 import { useAuth } from '@/auth/AuthProvider'
 import { ActivityList } from '@/components/admin/ActivityList'
+import { UsagePanel } from '@/components/admin/UsagePanel'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, PageHeader } from '@/components/ui/data'
 import { Notice } from '@/components/ui/feedback'
@@ -44,6 +45,7 @@ export default function SettingsPage() {
       <PageHeader title="Settings" description="Your account and how this installation is configured." />
       <div className="grid gap-6 xl:grid-cols-2">
         <div className="grid gap-6 self-start">
+          <UsagePanel />
           <Card>
             <CardHeader title="Your account" />
             <dl className="divide-y divide-line px-5">

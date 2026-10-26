@@ -1,0 +1,80 @@
+# Second, independent keep-alive (the Cloudflare Worker is the main one) and a
+# free weekly database backup kept for 90 days as a downloadable artifact.
+#
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL        https://<ref>.supabase.co
+#   SUPABASE_ANON_KEY   public anon / publishable key
+#   SUPABASE_DB_URL     (optional, enables backups) the "Session pooler" connection
+#                       string from Supabase → Connect, with your database password
+name: Keep-alive and backup
+
+on:
+  schedule:
+    - cron: '23 3 * * 1,4'   # Mondays and Thursdays, 03:23 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping the database
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::warning::SUPABASE_URL / SUPABASE_ANON_KEY secrets are not set; skipping."
+            exit 0
+          fi
+          AUTH=()
+          case "$SUPABASE_ANON_KEY" in eyJ*) AUTH=(-H "Authorization: Bearer $SUPABASE_ANON_KEY");; esac
+          curl --fail --silent --show-error --retry 3 --retry-delay 20 \
+            -X POST "${SUPABASE_URL%/}/rest/v1/rpc/keep_alive" \
+            -H "apikey: $SUPABASE_ANON_KEY" "${AUTH[@]}" \
+            -H "Content-Type: application/json" \
+            -d '{"p_source":"github-actions"}'
+
+  backup:
+    # Weekly (Monday run) or when started by hand.
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '23 3 * * 1,4'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check configuration
+        id: cfg
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::notice::SUPABASE_DB_URL is not set; database backup skipped."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          elif [ "$(date -u +%u)" != "1" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            echo "Backups run on Mondays only."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: supabase/setup-cli@v1
+        if: steps.cfg.outputs.enabled == 'true'
+        with:
+          version: latest
+      - name: Dump roles, schema and data
+        if: steps.cfg.outputs.enabled == 'true'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          mkdir backup
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/roles.sql --role-only
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/schema.sql
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/data.sql --use-copy --data-only
+          ls -la backup
+      - uses: actions/upload-artifact@v4
+        if: steps.cfg.outputs.enabled == 'true'
+        with:
+          name: database-backup-${{ github.run_id }}
+          path: backup/
+          retention-days: 90

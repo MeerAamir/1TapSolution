@@ -51,7 +51,7 @@ Contact cards are dynamic: the code opens a page with a "Save contact" button th
 - One scan = one request to `/q/<code>` handled by the edge function. The SPA **never** records scans, so a redirect plus page load cannot double count.
 - Direct visits to `/b/<slug>` (shared links) are page views, not scans, and are not recorded.
 - "Unique visitors" = distinct daily visitor hashes, summed over days. The same person on two days counts twice. People behind one network with the same browser and device type may count once. It is labelled as an estimate everywhere.
-- Visitor hashes are removed after 90 days (`prune_scan_identifiers`); counts are kept.
+- After 90 days, scan events are combined into daily totals and deleted, visitor hashes included (`compact_scan_events`, run daily by the keep-alive). Counts and charts are unchanged.
 
 ## Frontend structure
 
@@ -74,6 +74,7 @@ Contact cards are dynamic: the code opens a page with a "Save contact" button th
 
 - **Cloudflare Pages over Vercel**: Vercel's free Hobby plan is restricted to non-commercial use. Cloudflare's free plan allows commercial projects, and static requests are unmetered. Functions are limited to 100,000 requests a day on the free plan, which is far above early QR traffic.
 - **No custom backend**: Supabase plus two edge functions cover every requirement. Sensitive writes go through `SECURITY DEFINER` functions guarded by a shared secret, so the service-role key is never deployed anywhere.
+- **Free-plan guards**: a Cloudflare Worker cron keeps the Supabase Free project active (Free projects pause after about a week without database activity), the same call compacts old scans to keep the database small, and images are compressed before upload. See `FREE_HOSTING.md`.
 - **Least-privilege ingest**: the edge functions use the public anon key plus a dedicated ingest secret. If that secret leaked, the worst case is fake scan counts, not data access.
 - **Own QR renderer**: `qrcode` produces the matrix, and we draw it as vector shapes. That gives real vector SVG and PDF output, styled modules and corner markers, and an automatic error-correction bump for logos. Alignment markers are always drawn solid, because tests showed dot-style alignment markers fail to decode.
 - **No arbitrary HTML**: landing pages are built from a fixed set of structured blocks validated in the database. Text is always rendered as text.

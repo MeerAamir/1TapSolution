@@ -460,3 +460,20 @@ export async function setMessageStatus(id: string, status: ContactSubmission['st
 export async function deleteMessage(id: string) {
   unwrap(await sb().from('contact_submissions').delete().eq('id', id))
 }
+
+// ---------------------------------------------------------------------------
+// Free-plan usage
+// ---------------------------------------------------------------------------
+export interface UsageInfo {
+  database_bytes: number
+  file_bytes: number
+  file_count: number
+  raw_scan_rows: number
+  daily_scan_rows: number
+  last_heartbeat: string | null
+  heartbeat_source: string | null
+}
+
+export async function adminUsage(): Promise<UsageInfo> {
+  return unwrap(await sb().rpc('admin_usage')) as UsageInfo
+}

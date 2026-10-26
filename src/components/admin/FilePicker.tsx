@@ -8,6 +8,7 @@ import { config, storagePublicUrl } from '@/config'
 import { listFilesForPicker } from '@/lib/admin-api'
 import { ACCEPT_ATTR, ACCEPT_IMAGES, uploadFile } from '@/lib/files'
 import { friendlyError } from '@/lib/supabase'
+import { warnIfLargePdf } from './uploadNotices'
 import type { FileRecord } from '@/lib/types'
 import { useQuery } from '@/lib/use-query'
 import { cn, formatBytes } from '@/lib/utils'
@@ -54,6 +55,7 @@ export function UploadButton({
               onProgress: setProgress,
             })
             toast.success(`Uploaded ${rec.title}`)
+            warnIfLargePdf(rec)
             onUploaded(rec)
           } catch (err) {
             toast.error(friendlyError(err))

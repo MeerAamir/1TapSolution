@@ -16,6 +16,8 @@ export interface EdgeEnv {
   EDGE_INGEST_SECRET?: string
   /** Optional separate secret for visitor hashing; falls back to EDGE_INGEST_SECRET. */
   VISITOR_HASH_SECRET?: string
+  /** "on" to serve public files via /f/ through Cloudflare's cache. */
+  FILE_PROXY?: string
 }
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
@@ -88,13 +90,14 @@ export async function resolveQr(
 }
 
 /** Where to send the visitor straight away, or null to render the page. */
-export function redirectTarget(payload: QrPayload, supabaseUrl: string): string | null {
+export function redirectTarget(payload: QrPayload, supabaseUrl: string, fileBase?: string): string | null {
   if (payload.state !== 'ok' || !payload.type || !QR_TYPES.includes(payload.type)) return null
   if (payload.type === 'document') {
     const file = payload.destination?.file
     if (payload.destination?.open_mode === 'direct' && file?.path) {
       const path = file.path.split('/').map(encodeURIComponent).join('/')
-      return `${supabaseUrl}/storage/v1/object/public/public-files/${path}${file.version ? `?v=${file.version}` : ''}`
+      const base = fileBase ?? `${supabaseUrl}/storage/v1/object/public/public-files`
+      return `${base}/${path}${file.version ? `?v=${file.version}` : ''}`
     }
     return null
   }
@@ -135,7 +138,8 @@ export async function handleQrRequest(
   }
 
   if (payload && env.SUPABASE_URL) {
-    const target = redirectTarget(payload, env.SUPABASE_URL)
+    const fileBase = env.FILE_PROXY === 'on' ? `${new URL(request.url).origin}/f` : undefined
+    const target = redirectTarget(payload, env.SUPABASE_URL, fileBase)
     if (target) {
       return new Response(null, { status: 302, headers: { ...baseHeaders, Location: target } })
     }

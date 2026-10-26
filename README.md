@@ -18,6 +18,7 @@ A dynamic QR code and business-page platform. An administrator creates businesse
 | Frontend | React 19, TypeScript (strict), Vite, Tailwind CSS 4, Radix primitives, React Router, React Hook Form + Zod, Recharts, Lucide | Fast, maintained, accessible components |
 | Database, auth, files | Supabase (PostgreSQL, Auth, Storage) | One free-tier service for all three, with RLS |
 | Hosting + edge logic | Cloudflare Pages + Pages Functions | Free static hosting that allows commercial use, plus server-side redirects and scan recording |
+| Keep-alive | Cloudflare Worker cron (+ GitHub Actions) | Stops Supabase from pausing the free project; weekly backups |
 | QR | `qrcode` (matrix) + own vector renderer | True vector SVG/PDF, styled modules, decode-tested |
 
 There is no custom Node.js server. The only server code is two small edge functions (`functions/`): the QR resolver and the contact form endpoint. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -59,6 +60,9 @@ Test details and results are in [docs/TESTING.md](docs/TESTING.md).
 functions/                 Cloudflare Pages Functions (edge)
   q/[code].ts              /q/<code>: resolve, record scan, redirect or render
   api/contact.ts           contact form endpoint
+  f/[[path]].ts            optional cached file delivery
+workers/keepalive/         free scheduled Worker that keeps the database active
+.github/workflows/         second keep-alive + weekly database backup
 public/                    _headers (security + caching), _routes.json, favicon
 scripts/                   seed-demo-files.mjs
 src/
@@ -93,7 +97,8 @@ docs/                      architecture, database, security, deployment, testing
 - [Architecture](docs/ARCHITECTURE.md): QR resolution flow, analytics model, caching, decisions
 - [Database](docs/DATABASE.md): schema, lifecycle rules, access matrix
 - [Security](docs/SECURITY.md): model and deployment checklist
-- [Deployment](docs/DEPLOYMENT.md): Supabase and Cloudflare, step by step, plus custom domains and free-tier limits
+- [Deployment](docs/DEPLOYMENT.md): Supabase and Cloudflare, step by step, plus custom domains
+- [Running for free, reliably](docs/FREE_HOSTING.md): every free limit and how the project stays inside it (keep-alive, backups, email)
 - [Administrator setup](docs/ADMIN_SETUP.md)
 - [Testing](docs/TESTING.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)

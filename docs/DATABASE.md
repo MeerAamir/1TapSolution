@@ -9,6 +9,7 @@ PostgreSQL on Supabase. All changes are SQL migrations in `supabase/migrations/`
 | `…03_rpc.sql` | Public read functions, edge ingest functions, admin analytics, list views, function privileges |
 | `…04_storage.sql` | Storage buckets and policies |
 | `…05_admin_writes.sql` | Transactional `admin_save_business` and `admin_save_blocks` |
+| `…06_free_tier_guards.sql` | Keep-alive heartbeat, daily scan totals and compaction, usage meter |
 
 `supabase/seed.sql` adds the categories and demonstration data. It is safe to run more than once.
 
@@ -29,6 +30,8 @@ PostgreSQL on Supabase. All changes are SQL migrations in `supabase/migrations/`
 | `contact_submissions` | Website enquiries | `name`, `email`, `message`, `status`, `ip_hash` (30 days) |
 | `audit_logs` | Append-only change log | `actor_id`, `action`, `entity_type`, `entity_id`, `summary`, changed field names |
 | `app_secrets` | Hash of the edge ingest secret | no API access at all |
+| `app_heartbeat` | Single row bumped by the keep-alive jobs | `beats`, `last_beat`, `source`, `last_compaction` |
+| `qr_scan_daily` | Daily scan totals for events older than 90 days | `day` (UTC), `qr_code_id`, `business_id`, `qr_type`, `device_category`, `browser_category`, `scans`, `unique_visitors` |
 
 Views (`security_invoker`, so the caller's RLS applies): `admin_business_overview`, `admin_qr_overview`, `admin_file_overview` add category and business names, scan counts and usage counts for list screens.
 
@@ -54,7 +57,11 @@ Views (`security_invoker`, so the caller's RLS applies): `admin_business_overvie
 
 Lists and filters: `businesses(lower(name))`, `businesses(status, archived_at)`, `businesses(category_id)`, `qr_codes(business_id)`, `qr_codes(status, archived_at)`, `files(business_id, position)`.
 
-Analytics: `qr_scan_events(qr_code_id, occurred_at desc)`, `(business_id, occurred_at desc)`, `(occurred_at desc)`.
+Analytics: `qr_scan_events(qr_code_id, occurred_at desc)`, `(business_id, occurred_at desc)`, `(occurred_at desc)`; `qr_scan_daily(day)`, `(qr_code_id, day)`, `(business_id, day)`.
+
+## Size over time
+
+Raw scan events are kept for 90 days, then combined into one row per day, code, device type and browser. Analytics read both, so charts and totals are unchanged (a test checks this). Old daily totals count unique visitors per code and day; across several codes they are summed.
 
 Rate limiting: `contact_submissions(ip_hash, created_at desc)`.
 
@@ -67,7 +74,9 @@ Rate limiting: `contact_submissions(ip_hash, created_at desc)`.
 | `submit_contact_form(secret, …)` | anon **with the ingest secret** | Store a validated, rate-limited enquiry |
 | `admin_save_business`, `admin_save_blocks` | authenticated admins | Atomic writes |
 | `admin_overview_stats`, `admin_scan_series`, `admin_top_qr_codes`, `admin_scan_breakdown`, `file_usage` | authenticated admins | Dashboard data |
-| `set_edge_ingest_secret(secret)`, `prune_scan_identifiers(days)` | SQL editor only (no API role) | Operations |
+| `keep_alive(source)` | anon (rate-limited, one row) | Keeps the Free project active; runs `compact_scan_events` once a day |
+| `admin_usage()` | authenticated admins | Database size, file storage, heartbeat for the usage meter |
+| `set_edge_ingest_secret(secret)`, `compact_scan_events(days)`, `prune_scan_identifiers(days)` | SQL editor only (no API role) | Operations |
 
 ## Changing the schema later
 
