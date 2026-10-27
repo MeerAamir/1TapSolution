@@ -51,3 +51,6 @@ Open the keep-alive Worker's URL. It shows what is wrong (for example `database:
 
 ### An upload says "larger than 10 MB even after compression"
 Photos up to 25 MB are accepted and compressed automatically, but some images (very detailed PNGs with transparency) stay large. Save it as JPEG, or reduce its size, then upload again.
+
+### Cloudflare ignores the variables set in the dashboard
+Do not add a `wrangler.toml` at the repository root. When Pages finds one, it becomes the source of truth and the dashboard's variables are not used (the build log says "Build environment variables: (none found)"). The keep-alive Worker's config lives in `workers/keepalive/` and does not affect the site.

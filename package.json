@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:edge": "npm run build && wrangler pages dev dist",
+    "dev:edge": "npm run build && wrangler pages dev dist --compatibility-date=2026-10-01",
     "build": "tsc -b && tsc -p tsconfig.functions.json && vite build",
     "preview": "vite preview",
     "lint": "oxlint src functions tests",
