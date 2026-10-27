@@ -33,7 +33,7 @@ export async function login(page: Page, who: { email: string; password: string }
 
 export async function loginAsAdmin(page: Page) {
   await login(page)
-  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'My QR codes' })).toBeVisible()
 }
 
 /** A tiny but valid one-page PDF containing the given text. */

@@ -158,3 +158,5 @@ Sources: [Supabase pricing](https://supabase.com/pricing), [Supabase billing FAQ
 ## Updating the site
 
 Push to the main branch. Cloudflare rebuilds automatically. Database changes ship as new files in `supabase/migrations/`, applied with step 2 before (or with) the code that needs them.
+
+For an existing project, run only the new migration file(s) in the SQL Editor. For example, the simple QR studio needs `supabase/migrations/20261027000007_simple_studio.sql`. It is safe to run on a database that already has migrations 1–6. After adding a migration, run `npm run db:bundle` so `setup-all.sql` stays complete for new projects.

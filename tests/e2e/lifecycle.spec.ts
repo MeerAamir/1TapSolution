@@ -8,7 +8,7 @@ import { db, loginAsAdmin, makePdf, stack, uid } from './fixtures'
 /**
  * One realistic administrator journey, in order:
  * create business → edit → upload PDF → create document QR → scan → replace PDF
- * → deactivate / reactivate → download PNG/SVG/PDF → delete.
+ * → pause / resume → download PNG/SVG/PDF → delete.
  */
 test.describe.configure({ mode: 'serial' })
 
@@ -98,23 +98,29 @@ test('refuses a disguised executable', async ({ page }) => {
   await expect(page.getByText('The file content is not a valid PDF or image.')).toBeVisible()
 })
 
-test('creates a dynamic document QR code (Scenario 7)', async ({ page }) => {
-  await loginAsAdmin(page)
-  await page.goto(`/admin/qr/new?business=${businessId}`)
-  await page.getByRole('textbox', { name: /^Name/ }).fill('Counter menu')
-  await page.getByRole('radio', { name: /PDF \/ document/ }).click()
-  await page.getByRole('button', { name: 'Choose or upload PDF' }).click()
+async function choosePdf(page: Page) {
+  await page.getByRole('button', { name: 'Choose from my files' }).click()
   await page.getByRole('button', { name: /spring menu/ }).click()
   await page.getByRole('button', { name: 'Use this file' }).click()
-  await page.getByRole('button', { name: 'Create QR code' }).click()
+}
 
-  await expect(page.getByText('QR code created. You can download it now.')).toBeVisible()
+test('creates a dynamic document QR code that saves itself (Scenario 7)', async ({ page }) => {
+  await loginAsAdmin(page)
+  await page.goto(`/admin/qr/new?business=${businessId}`)
+  await page.getByRole('button', { name: /^PDF/ }).click()
+  await choosePdf(page)
+
+  // No save button: the code is stored as soon as the content is complete.
   await expect(page).toHaveURL(/\/admin\/qr\/[0-9a-f-]{36}$/)
+  await expect(page.getByText('Saved and live. Scan it now.')).toBeVisible()
+  await page.getByLabel('QR code name').fill('Counter menu')
   qrId = page.url().split('/').pop()!
-  const rows = await db<{ public_code: string }>(`select public_code from qr_codes where id = $1`, [qrId])
+  await expect.poll(async () => (await db<{ name: string }>(`select name from qr_codes where id = $1`, [qrId]))[0].name).toBe('Counter menu')
+  const rows = await db<{ public_code: string; business_id: string }>(`select public_code, business_id from qr_codes where id = $1`, [qrId])
   code = rows[0].public_code
+  expect(rows[0].business_id).toBe(businessId)
   expect(code).toMatch(/^[A-Za-z0-9]{10}$/)
-  await expect(page.getByText(`${stack.SITE}/q/${code}`)).toBeVisible()
+  await expect(page.getByText(`${stack.SITE.replace(/^https?:\/\//, '')}/q/${code}`)).toBeVisible()
 })
 
 test('scanning opens the document and records exactly one scan (Scenarios 8, 17, 18)', async ({ browser }) => {
@@ -141,10 +147,11 @@ test('the dashboard charts show recorded scans, even with a legacy browser time 
   const ctx = await browser.newContext({ timezoneId: 'Asia/Calcutta' })
   const page = await ctx.newPage()
   await loginAsAdmin(page)
+  await page.goto('/admin/overview')
   await expect(page.getByText('No scans yet')).toHaveCount(0)
   await expect(page.locator('.recharts-area-curve').first()).toBeVisible()
   await page.goto(`/admin/qr/${qrId}`)
-  await page.getByRole('tab', { name: /Scans/ }).click()
+  await page.locator('summary', { hasText: 'Scans' }).click()
   await expect(page.locator('.recharts-area-curve').first()).toBeVisible()
   await ctx.close()
 })
@@ -173,13 +180,14 @@ test('replacing the PDF serves the new file on the same QR code (Scenarios 10, 1
 test('changing the destination keeps the printed link (Scenario 10)', async ({ page, context }) => {
   await loginAsAdmin(page)
   await page.goto(`/admin/qr/${qrId}`)
-  await page.getByRole('radio', { name: /Website/ }).click()
+  await page.getByRole('button', { name: 'Change type' }).click()
+  await page.getByRole('button', { name: /^Website/ }).click()
   await page.getByLabel('Web address').fill('javascript:alert(1)')
-  await page.getByRole('button', { name: 'Save changes' }).click()
-  await expect(page.getByText('Enter a full web address starting with https://')).toBeVisible()
+  await expect(page.getByText('Enter a full web address starting with https://').first()).toBeVisible()
+  // Invalid content is never saved: the printed code still opens the document.
+  expect((await db<{ type: string }>(`select type from qr_codes where id = $1`, [qrId]))[0].type).toBe('document')
 
-  await page.getByLabel('Web address').fill('https://example.org/menu')
-  await page.getByRole('button', { name: 'Save changes' }).click()
+  await page.getByLabel('Web address').fill('example.org/menu')
   await expect.poll(async () => (await db<{ type: string }>(`select type from qr_codes where id = $1`, [qrId]))[0].type).toBe('website')
 
   const res = await context.request.get(`/q/${code}?preview=1`, { maxRedirects: 0 })
@@ -187,11 +195,9 @@ test('changing the destination keeps the printed link (Scenario 10)', async ({ p
   expect(res.headers()['location']).toBe('https://example.org/menu')
 
   // Back to the document for the remaining steps.
-  await page.getByRole('radio', { name: /PDF \/ document/ }).click()
-  await page.getByRole('button', { name: 'Choose or upload PDF' }).click()
-  await page.getByRole('button', { name: /spring menu/ }).click()
-  await page.getByRole('button', { name: 'Use this file' }).click()
-  await page.getByRole('button', { name: 'Save changes' }).click()
+  await page.getByRole('button', { name: 'Change type' }).click()
+  await page.getByRole('button', { name: /^PDF/ }).click()
+  await choosePdf(page)
   await expect.poll(async () => (await db<{ type: string }>(`select type from qr_codes where id = $1`, [qrId]))[0].type).toBe('document')
 })
 
@@ -199,8 +205,8 @@ test('deactivating shows an unavailable page; reactivating restores it (Scenario
   await loginAsAdmin(page)
   await page.goto(`/admin/qr/${qrId}`)
   await openQrMenu(page)
-  await page.getByRole('menuitem', { name: 'Deactivate' }).click()
-  await expect(page.getByText(/QR code deactivated/)).toBeVisible()
+  await page.getByRole('menuitem', { name: 'Pause' }).click()
+  await expect(page.getByText(/Scans now show/).first()).toBeVisible()
 
   const visitor = await context.newPage()
   const res = await visitor.goto(`/q/${code}`)
@@ -208,8 +214,9 @@ test('deactivating shows an unavailable page; reactivating restores it (Scenario
   await expect(visitor.getByRole('heading', { name: 'This QR code is currently unavailable' })).toBeVisible()
   await expect(visitor.getByText(NAME)).toHaveCount(0)
 
-  await page.getByRole('button', { name: 'Reactivate it' }).click()
-  await expect(page.getByText('QR code reactivated')).toBeVisible()
+  await openQrMenu(page)
+  await page.getByRole('menuitem', { name: 'Resume' }).click()
+  await expect(page.getByText('Live again')).toBeVisible()
   await visitor.goto(`/q/${code}`)
   await expect(visitor.getByRole('heading', { name: 'spring menu' })).toBeVisible()
 })
@@ -220,13 +227,15 @@ test('downloads real, scannable PNG, SVG and PDF files (Scenario 21)', async ({ 
   const expected = `${stack.SITE}/q/${code}`
 
   const pngDl = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'PNG' }).click()
+  await page.getByRole('button', { name: 'Download', exact: true }).click()
+  await page.getByRole('menuitem', { name: /PNG image/ }).click()
   const png = PNG.sync.read(readFileSync((await (await pngDl).path())!))
   expect(png.width).toBe(2048)
   expect(jsQR(new Uint8ClampedArray(png.data), png.width, png.height)?.data).toBe(expected)
 
   const svgDl = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'SVG' }).click()
+  await page.getByRole('button', { name: 'Download', exact: true }).click()
+  await page.getByRole('menuitem', { name: /SVG vector/ }).click()
   const svg = readFileSync((await (await svgDl).path())!, 'utf8')
   expect(svg.startsWith('<svg')).toBe(true)
   expect(svg).not.toContain('<image')
@@ -234,7 +243,8 @@ test('downloads real, scannable PNG, SVG and PDF files (Scenario 21)', async ({ 
   expect(jsQR(new Uint8ClampedArray(raster.pixels), raster.width, raster.height)?.data).toBe(expected)
 
   const pdfDl = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Print PDF' }).click()
+  await page.getByRole('button', { name: 'Download', exact: true }).click()
+  await page.getByRole('menuitem', { name: /PDF, ready to print/ }).click()
   const pdf = readFileSync((await (await pdfDl).path())!)
   expect(pdf.subarray(0, 5).toString()).toBe('%PDF-')
 })
@@ -244,9 +254,8 @@ test('deleting a QR code leaves other codes working (Scenarios 14, 19)', async (
   await page.goto(`/admin/qr/${qrId}`)
   await openQrMenu(page)
   await page.getByRole('menuitem', { name: 'Delete' }).click()
-  await page.getByLabel(/Type DELETE to confirm/).fill('DELETE')
-  await page.getByRole('button', { name: 'Delete permanently' }).click()
-  await expect(page).toHaveURL(/\/admin\/qr$/)
+  await page.getByRole('button', { name: 'Delete', exact: true }).click()
+  await expect(page).toHaveURL(/\/admin$/)
 
   const visitor = await context.newPage()
   expect((await visitor.goto(`/q/${code}`))?.status()).toBe(404)

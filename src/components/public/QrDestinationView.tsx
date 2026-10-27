@@ -2,12 +2,14 @@ import { Download, ExternalLink, FileText, Mail, MessageCircle, Phone, UserPlus,
 import { useEffect, type ReactNode } from 'react'
 import { LogoMark } from '@/components/brand/Logo'
 import { storagePublicUrl } from '@/config'
-import { mailtoLink, redirectUrlFor, telLink, vcardText, whatsappLink } from '@/lib/qr/destinations'
+import { mailtoLink, redirectUrlFor, telLink, whatsappLink } from '@/lib/qr/destinations'
+import { CopyButton, downloadVcard } from './actions'
 import type { DestinationByType } from '@/lib/qr/types'
 import type { PublicBusiness, PublicFile, PublicQrPayload } from '@/lib/types'
 import { formatBytes, formatDate } from '@/lib/utils'
 import { BlockList, documentUrls } from './Blocks'
 import { BusinessProfile } from './BusinessProfile'
+import { LandingView } from './LandingView'
 import { ActionLink, DemoRibbon, PoweredBy } from './primitives'
 
 /** Small branded shell for single-purpose QR pages (call, email, document, card). */
@@ -22,6 +24,7 @@ function FocusShell({ business, children }: { business?: PublicBusiness; childre
 }
 
 function BusinessMini({ business }: { business: PublicBusiness }) {
+  if (business.is_workspace || !business.name) return null
   return (
     <div className="mb-6 flex items-center gap-3">
       {business.logo ? (
@@ -108,18 +111,6 @@ function DocumentView({ file, business }: { file: PublicFile; business: PublicBu
       <PoweredBy />
     </div>
   )
-}
-
-function downloadVcard(card: DestinationByType['contact_card']) {
-  const blob = new Blob([vcardText(card)], { type: 'text/vcard;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${card.full_name.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-') || 'contact'}.vcf`
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 function ContactCardView({ card, business }: { card: DestinationByType['contact_card']; business: PublicBusiness }) {
@@ -271,7 +262,35 @@ export function QrDestinationView({ payload }: { payload: PublicQrPayload }) {
       )
     case 'contact_card':
       return <ContactCardView card={d as unknown as DestinationByType['contact_card']} business={business} />
+    case 'text':
+      return (
+        <FocusShell business={business}>
+          <BusinessMini business={business} />
+          {typeof d.title === 'string' && d.title && <h1 className="mb-3 text-2xl font-bold tracking-[-0.02em]">{d.title}</h1>}
+          <div className="rounded-2xl border border-line bg-white p-5">
+            <p className="whitespace-pre-line break-words text-[1.02rem] leading-relaxed text-ink">{String(d.text ?? '')}</p>
+          </div>
+          <div className="mt-4">
+            <CopyButton text={String(d.text ?? '')} label="Copy text" accent={accent} />
+          </div>
+        </FocusShell>
+      )
     case 'landing_page':
+      if (business.is_workspace || d.show_business === false) {
+        return (
+          <LandingView
+            header={{
+              title: d.title as string | undefined,
+              subtitle: d.subtitle as string | undefined,
+              accent: (d.accent as string | undefined) || undefined,
+              avatar: payload.destination?.avatar,
+              cover: payload.destination?.cover,
+            }}
+            blocks={business.blocks ?? []}
+            isDemo={business.is_demo}
+          />
+        )
+      }
       return (
         <BusinessProfile business={business} hideProfileBlocks>
           {business.blocks?.length ? (

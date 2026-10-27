@@ -177,3 +177,62 @@ export async function imageUrlToDataUrl(url: string): Promise<string | undefined
     return undefined
   }
 }
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
+}
+
+/**
+ * Opens a clean print view (the code at about 9 cm, the title above and the
+ * link below) and starts printing. No scripts run in the new window.
+ */
+export function printQr(text: string, design: QrDesign, opts: RenderOptions, title: string) {
+  const svg = renderSvg(text, design, opts).replace(/ width="[\d.]+" height="[\d.]+"/, ' width="100%" height="100%"')
+  const w = window.open('', '_blank', 'width=720,height=900')
+  if (!w) throw new Error('Allow pop-ups for this site to print.')
+  const link = text.startsWith('http') ? `<p class="link">${escapeHtml(text)}</p>` : ''
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+<style>
+  @page { margin: 16mm; }
+  html, body { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #0f172a; }
+  main { display: flex; min-height: 90vh; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  h1 { font-size: 22pt; margin: 0 0 8mm; }
+  .qr { width: 90mm; }
+  .hint { margin: 7mm 0 0; font-size: 12pt; color: #475569; }
+  .link { margin: 2mm 0 0; font-size: 9pt; color: #94a3b8; }
+</style></head><body><main>
+  ${title ? `<h1>${escapeHtml(title)}</h1>` : ''}
+  <div class="qr">${svg}</div>
+  <p class="hint">Scan with your phone camera</p>${link}
+</main></body></html>`)
+  w.document.close()
+  w.focus()
+  // Give the browser a moment to lay out the SVG before opening the dialog.
+  setTimeout(() => {
+    w.print()
+  }, 250)
+}
+
+export type ShareResult = 'shared' | 'copied' | 'failed'
+
+/** Native share sheet (phone) with the QR image attached where supported, else copies the link. */
+export async function shareQr(text: string, design: QrDesign, opts: RenderOptions, title: string, url?: string): Promise<ShareResult> {
+  if (navigator.share) {
+    try {
+      const blob = await svgToPngBlob(renderSvg(text, design, opts), 1024)
+      const file = new File([blob], `${safeFilename(title)}.png`, { type: 'image/png' })
+      const data: ShareData = { title, text: url ? `${title}\n${url}` : title, url }
+      if (navigator.canShare?.({ files: [file] })) data.files = [file]
+      await navigator.share(data)
+      return 'shared'
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return 'shared'
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url ?? text)
+    return 'copied'
+  } catch {
+    return 'failed'
+  }
+}

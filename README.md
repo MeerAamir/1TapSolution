@@ -5,7 +5,10 @@
 A dynamic QR code and business-page platform. An administrator creates businesses, builds their mobile pages, and issues QR codes that point to permanent links. What a code opens (a business profile, a PDF menu, a website, WhatsApp, Google Maps, a contact card, a custom landing page and more) can be changed at any time without reprinting the code.
 
 - **Public website** with a working demo QR code, features, solutions, FAQ and a protected contact form.
-- **Administrator dashboard**: businesses, QR codes, categories, files & documents, analytics, messages, settings, audit log.
+- **Simple QR studio** (the dashboard home): pick a type (website, multi-link page, PDF, contact card, text, WhatsApp, phone, email, location, social, Wi-Fi), type or paste the content, and the real code is on screen and scannable straight away. Changes save automatically. Download (PNG, SVG, PDF), share and print from the code or the list.
+- **Multi-link pages**: one code opens a page with as many items as you like (links, PDFs, text, phone, WhatsApp, email, contact card with “Save contact”, social profiles, images, gallery, map, Wi-Fi details), with a live phone preview while editing.
+- **Advanced tools** (tucked away in the menu): businesses with full profile pages, categories, files & documents, dashboard stats.
+- **Also**: analytics, contact messages, settings, audit log.
 - **Customer pages** at `/q/<code>` and `/b/<slug>`, built mobile-first and loaded with minimal JavaScript.
 - **Dynamic QR codes** with design controls (colours, module and corner styles, centre logo, frame, call to action), scan-reliability warnings, and PNG, vector SVG and print-ready PDF downloads.
 - **Privacy-conscious analytics**: scans recorded server-side before redirecting, no IP addresses stored, daily-rotating anonymous visitor estimate.
@@ -51,6 +54,7 @@ npm run dev:edge   # builds, then serves dist/ with Cloudflare's local runtime (
 | `npm run test:db` | Database integration tests against a local Postgres (migrations, RLS, functions) |
 | `npm run e2e:stack` / `npm run test:e2e` | Full browser tests against a local Supabase-equivalent stack |
 | `npm run seed:files` | Upload demo PDFs and create the demo document QR codes |
+| `npm run db:bundle` | Rebuild `supabase/setup-all.sql` from the migrations and seed |
 
 Test details and results are in [docs/TESTING.md](docs/TESTING.md).
 

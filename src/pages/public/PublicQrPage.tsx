@@ -27,7 +27,9 @@ export default function PublicQrPage() {
     return () => controller.abort()
   }, [code, payload])
 
-  usePageMeta(payload?.business?.name, payload?.business?.accent_color)
+  const d = (payload?.destination ?? {}) as Record<string, unknown>
+  const pageTitle = payload?.business?.name || (typeof d.title === 'string' && d.title) || (typeof d.full_name === 'string' && d.full_name) || undefined
+  usePageMeta(pageTitle, (typeof d.accent === 'string' && d.accent) || payload?.business?.accent_color)
 
   if (!isSupabaseConfigured) {
     return <StatusScreen title="Not connected" message="This site is not connected to its database yet." />

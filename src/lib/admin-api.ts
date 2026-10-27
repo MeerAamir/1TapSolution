@@ -87,7 +87,22 @@ export async function listBusinesses(p: BusinessListParams): Promise<{ rows: Bus
 }
 
 export async function listBusinessOptions(): Promise<Array<Pick<Business, 'id' | 'name' | 'slug' | 'status' | 'archived_at'>>> {
-  return unwrap(await sb().from('businesses').select('id, name, slug, status, archived_at').order('name'))
+  return unwrap(
+    await sb().from('businesses').select('id, name, slug, status, archived_at').eq('is_workspace', false).order('name'),
+  )
+}
+
+let workspaceId: Promise<string> | null = null
+/** The hidden owner of QR codes that are not linked to a business (created on first use). */
+export function workspaceBusinessId(): Promise<string> {
+  workspaceId ??= Promise.resolve(sb().rpc('admin_workspace_business')).then(({ data, error }) => {
+    if (error) {
+      workspaceId = null
+      throw error
+    }
+    return data as string
+  })
+  return workspaceId
 }
 
 export interface BusinessBundle {
@@ -262,7 +277,18 @@ export async function getQr(id: string): Promise<QrOverview> {
   return unwrap(await sb().from('admin_qr_overview').select('*').eq('id', id).single()) as QrOverview
 }
 
-export type QrInput = Pick<QrCodeRecord, 'business_id' | 'name' | 'description' | 'type' | 'destination' | 'file_id' | 'design'>
+export type QrInput = Pick<QrCodeRecord, 'business_id' | 'name' | 'description' | 'type' | 'destination' | 'file_id' | 'design'> & {
+  /** Chosen in the browser so the code can be shown (and printed) before the first save. */
+  public_code?: string
+}
+
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
+/** A random 10-character permanent code, same shape as the database default. */
+export function newPublicCode(length = 10): string {
+  const bytes = new Uint8Array(length)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('')
+}
 
 export async function createQr(input: QrInput): Promise<QrCodeRecord> {
   return unwrap(await sb().from('qr_codes').insert(input).select().single()) as QrCodeRecord

@@ -13,7 +13,21 @@ const opt = (max: number) =>
 /** Destination schema per QR type — mirrors public.is_valid_qr_destination(). */
 export const destinationSchemas: Record<QrType, z.ZodType> = {
   business_profile: z.object({}).strip(),
-  landing_page: z.object({ title: opt(160) }),
+  landing_page: z.object({
+    title: opt(160),
+    subtitle: opt(300),
+    accent: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/, 'Choose a colour')
+      .optional(),
+    avatar_file_id: z.string().uuid().optional(),
+    cover_file_id: z.string().uuid().optional(),
+    show_business: z.boolean().optional(),
+  }),
+  text: z.object({
+    title: opt(160),
+    text: z.string().trim().min(1, 'Type the text to show').max(4000, 'Use 4,000 characters or fewer'),
+  }),
   document: z.object({ open_mode: z.enum(['page', 'direct']).default('page') }),
   website: z.object({ url: httpUrl }),
   custom_link: z.object({ url: httpUrl }),

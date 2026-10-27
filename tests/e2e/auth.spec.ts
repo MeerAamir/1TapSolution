@@ -26,11 +26,11 @@ test.describe('administrator authentication', () => {
     await page.getByLabel('Email').fill(stack.ADMIN.email)
     await page.getByLabel('Password').fill(stack.ADMIN.password)
     await page.getByRole('button', { name: 'Sign in' }).click()
-    await expect(page.getByRole('heading', { name: 'QR codes' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'My QR codes' })).toBeVisible()
 
     // Session persists across reloads.
     await page.reload()
-    await expect(page.getByRole('heading', { name: 'QR codes' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'My QR codes' })).toBeVisible()
 
     await page.getByRole('button', { name: 'Account menu' }).click()
     await page.getByRole('menuitem', { name: 'Sign out' }).click()
@@ -73,6 +73,7 @@ test.describe('data API with the public anon key (Scenarios 3, 15)', () => {
 
   test('an admin session works end to end', async ({ page }) => {
     await loginAsAdmin(page)
-    await expect(page.getByText('Businesses').first()).toBeVisible()
+    // Codes are loaded through the admin session (RLS lets admins read them).
+    await expect(page.getByRole('link', { name: /Chinar Leaf/ }).first()).toBeVisible()
   })
 })

@@ -81,3 +81,14 @@ Real problems these tests found and that were fixed: anonymous visitors could ca
 - Real phone cameras on printed codes. Rendered images are decoded in tests, but print size, paper, lighting and lenses vary. Do the printed-proof check in `LAUNCH_CHECKLIST.md`.
 - Email delivery for password resets (depends on your SMTP provider).
 - Supabase Storage itself (replaced by an in-memory store in the browser tests; its policies are tested at database level).
+
+## Simple QR studio
+
+| Behaviour | Covered by |
+| --- | --- |
+| A pasted address (even without `https://`) is live as soon as it is valid, with no save button and no business | `tests/e2e/studio.spec.ts` |
+| One multi-link page holds links, phone, contact card and Wi-Fi items; the phone preview and the visitor page show them | `tests/e2e/studio.spec.ts`, `tests/db/studio.test.ts` |
+| Text codes show the text with a Copy button | `tests/e2e/studio.spec.ts`, `tests/db/studio.test.ts` |
+| Invalid content is never saved, so printed codes keep opening the last good content | `tests/e2e/lifecycle.spec.ts` (changing the destination) |
+| The hidden workspace owner is admin-only, never listed as a business and never shown to visitors | `tests/db/studio.test.ts` |
+| Download (PNG, SVG, PDF) from the studio produces codes that decode to the permanent link | `tests/e2e/lifecycle.spec.ts` |

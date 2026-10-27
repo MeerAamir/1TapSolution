@@ -38,6 +38,7 @@ export interface Business {
   is_demo: boolean
   created_at: string
   updated_at: string
+  is_workspace?: boolean
 }
 
 export interface BusinessOverview extends Business {
@@ -118,7 +119,9 @@ export interface QrCodeRecord {
 }
 
 export interface QrOverview extends QrCodeRecord {
-  business_name: string
+  /** Null for codes owned by the hidden workspace (no business). */
+  business_name: string | null
+  business_is_workspace: boolean
   business_slug: string
   business_status: RecordStatus
   business_archived_at: string | null
@@ -139,6 +142,9 @@ export type BlockType =
   | 'whatsapp'
   | 'social'
   | 'map'
+  | 'email'
+  | 'contact'
+  | 'wifi'
 
 export interface ContentBlock {
   id: string
@@ -208,6 +214,8 @@ export interface PublicBusiness {
   google_business_url?: string
   hours_note?: string
   is_demo?: boolean
+  /** True for codes created without a business: the owner is never shown. */
+  is_workspace?: boolean
   custom_fields?: CustomField[]
   hours?: Array<{ day: number; opens: string; closes: string }>
   locations?: Array<{ label: string; address?: string; latitude?: number; longitude?: number; maps_url?: string }>
@@ -221,6 +229,6 @@ export interface PublicQrPayload {
   state: 'ok' | 'not_found' | 'unavailable' | 'static'
   code?: string
   type?: QrType
-  destination?: Record<string, unknown> & { file?: PublicFile | null }
+  destination?: Record<string, unknown> & { file?: PublicFile | null; avatar?: PublicFile | null; cover?: PublicFile | null }
   business?: PublicBusiness
 }

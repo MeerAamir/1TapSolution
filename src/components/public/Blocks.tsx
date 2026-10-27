@@ -1,9 +1,10 @@
-import { FileText, Globe, MapPin, MessageCircle, Phone } from 'lucide-react'
+import { FileText, Globe, Mail, MapPin, MessageCircle, Phone, UserPlus, Wifi } from 'lucide-react'
 import { storagePublicUrl } from '@/config'
-import { mapsLink, telLink, whatsappLink } from '@/lib/qr/destinations'
-import { SOCIAL_LABELS, type SocialPlatform } from '@/lib/qr/types'
+import { mailtoLink, mapsLink, telLink, whatsappLink } from '@/lib/qr/destinations'
+import { SOCIAL_LABELS, type DestinationByType, type SocialPlatform } from '@/lib/qr/types'
 import type { PublicBlock, PublicFile } from '@/lib/types'
 import { formatBytes } from '@/lib/utils'
+import { CopyButton, downloadVcard } from './actions'
 import { ActionLink } from './primitives'
 import { SocialIcon } from './SocialIcon'
 
@@ -79,9 +80,76 @@ function BlockView({ block, accent }: { block: PublicBlock; accent: string }) {
         </ActionLink>
       ) : null
     }
+    case 'email':
+      return (
+        <ActionLink href={mailtoLink(str(d.email), str(d.subject) || undefined)} accent={accent} variant="outline">
+          <Mail /> {str(d.label) || str(d.email)}
+        </ActionLink>
+      )
+    case 'contact':
+      return <ContactBlock card={d as unknown as DestinationByType['contact_card']} accent={accent} />
+    case 'wifi':
+      return <WifiBlock ssid={str(d.ssid)} password={str(d.password)} open={str(d.encryption) === 'nopass'} accent={accent} />
     default:
       return null
   }
+}
+
+function ContactBlock({ card, accent }: { card: DestinationByType['contact_card']; accent: string }) {
+  const sub = [card.title, card.organization].filter(Boolean).join(', ')
+  return (
+    <div className="rounded-2xl border border-line bg-white p-4">
+      <div className="flex items-center gap-3">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-base font-bold" style={{ backgroundColor: `${accent}14`, color: accent }}>
+          {card.full_name
+            .split(/\s+/)
+            .map((p) => p[0])
+            .slice(0, 2)
+            .join('')
+            .toUpperCase()}
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate font-semibold text-ink">{card.full_name}</span>
+          {sub && <span className="block truncate text-sm text-muted">{sub}</span>}
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={() => downloadVcard(card)}
+        className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl text-[0.95rem] font-semibold text-white"
+        style={{ backgroundColor: accent }}
+      >
+        <UserPlus className="size-[1.15rem]" /> Save contact
+      </button>
+    </div>
+  )
+}
+
+function WifiBlock({ ssid, password, open, accent }: { ssid: string; password: string; open: boolean; accent: string }) {
+  return (
+    <div className="rounded-2xl border border-line bg-white p-4">
+      <div className="flex items-center gap-3">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg" style={{ backgroundColor: `${accent}14`, color: accent }}>
+          <Wifi className="size-5" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-xs text-muted">Wi-Fi network</span>
+          <span className="block truncate font-semibold text-ink">{ssid}</span>
+        </span>
+      </div>
+      {open ? (
+        <p className="mt-3 text-sm text-muted">Open network, no password needed.</p>
+      ) : (
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-surface px-3 py-2">
+          <span className="min-w-0">
+            <span className="block text-xs text-muted">Password</span>
+            <span className="block truncate font-mono text-[0.95rem] text-ink">{password}</span>
+          </span>
+          <CopyButton text={password} accent={accent} />
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function Gallery({ files }: { files: PublicFile[] }) {

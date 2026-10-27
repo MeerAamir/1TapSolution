@@ -7,6 +7,7 @@ import {
   LogOut,
   Mail,
   Menu,
+  PlusCircle,
   QrCode,
   Settings,
   Tags,
@@ -21,15 +22,45 @@ import { Menu as DropMenu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } f
 import { cn } from '@/lib/utils'
 
 const NAV = [
-  { to: '/admin', label: 'Overview', icon: LayoutDashboard, end: true },
-  { to: '/admin/businesses', label: 'Businesses', icon: Building2 },
-  { to: '/admin/qr', label: 'QR codes', icon: QrCode },
-  { to: '/admin/categories', label: 'Categories', icon: Tags },
-  { to: '/admin/files', label: 'Files & documents', icon: FolderOpen },
-  { to: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
+  { to: '/admin', label: 'My QR codes', icon: QrCode, end: true },
+  { to: '/admin/qr/new', label: 'Create QR code', icon: PlusCircle, end: true },
+  { to: '/admin/analytics', label: 'Scans & analytics', icon: BarChart3 },
   { to: '/admin/messages', label: 'Messages', icon: Mail },
   { to: '/admin/settings', label: 'Settings', icon: Settings },
 ]
+
+const ADVANCED = [
+  { to: '/admin/overview', label: 'Dashboard stats', icon: LayoutDashboard },
+  { to: '/admin/businesses', label: 'Businesses', icon: Building2 },
+  { to: '/admin/files', label: 'Files & documents', icon: FolderOpen },
+  { to: '/admin/categories', label: 'Categories', icon: Tags },
+]
+
+function NavItem({ item, onNavigate, small }: { item: (typeof NAV)[number]; onNavigate?: () => void; small?: boolean }) {
+  return (
+    <li>
+      <NavLink
+        to={item.to}
+        end={item.end}
+        onClick={onNavigate}
+        className={({ isActive }) =>
+          cn(
+            'flex items-center gap-3 rounded-lg px-3 font-medium transition-colors',
+            small ? 'py-2 text-[0.8125rem]' : 'py-2.5 text-sm',
+            isActive ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/5 hover:text-white',
+          )
+        }
+      >
+        {({ isActive }) => (
+          <>
+            <item.icon className={cn('size-[1.1rem]', isActive ? 'text-violet-light' : 'text-white/40')} />
+            {item.label}
+          </>
+        )}
+      </NavLink>
+    </li>
+  )
+}
 
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const { signOut } = useAuth()
@@ -44,28 +75,19 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
       <nav className="flex-1 overflow-y-auto px-3 py-2" aria-label="Dashboard">
         <ul className="grid gap-0.5">
           {NAV.map((item) => (
-            <li key={item.to}>
-              <NavLink
-                to={item.to}
-                end={item.end}
-                onClick={onNavigate}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                    isActive ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/5 hover:text-white',
-                  )
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    <item.icon className={cn('size-[1.1rem]', isActive ? 'text-violet-light' : 'text-white/40')} />
-                    {item.label}
-                  </>
-                )}
-              </NavLink>
-            </li>
+            <NavItem key={item.to} item={item} onNavigate={onNavigate} />
           ))}
         </ul>
+        <details className="group mt-6">
+          <summary className="cursor-pointer list-none px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white/35 hover:text-white/60 [&::-webkit-details-marker]:hidden">
+            Advanced <span className="group-open:hidden">+</span>
+          </summary>
+          <ul className="mt-1 grid gap-0.5">
+            {ADVANCED.map((item) => (
+              <NavItem key={item.to} item={{ ...item, end: false }} onNavigate={onNavigate} small />
+            ))}
+          </ul>
+        </details>
       </nav>
       <div className="border-t border-white/10 p-3">
         <a
@@ -141,7 +163,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-2">
             <Button asChild size="sm" className="hidden sm:inline-flex">
               <Link to="/admin/qr/new">
-                <QrCode /> New QR code
+                <PlusCircle /> Create QR code
               </Link>
             </Button>
             <DropMenu>

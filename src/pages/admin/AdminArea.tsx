@@ -11,8 +11,8 @@ const OverviewPage = lazy(() => import('./overview/OverviewPage'))
 const BusinessesPage = lazy(() => import('./businesses/BusinessesPage'))
 const BusinessFormPage = lazy(() => import('./businesses/BusinessFormPage'))
 const BusinessDetailPage = lazy(() => import('./businesses/BusinessDetailPage'))
-const QrListPage = lazy(() => import('./qr/QrListPage'))
-const QrEditorPage = lazy(() => import('./qr/QrEditorPage'))
+const QrLibraryPage = lazy(() => import('./qr/QrLibraryPage'))
+const QrStudio = lazy(() => import('./qr/studio/QrStudio'))
 const CategoriesPage = lazy(() => import('./categories/CategoriesPage'))
 const FilesPage = lazy(() => import('./files/FilesPage'))
 const AnalyticsPage = lazy(() => import('./analytics/AnalyticsPage'))
@@ -26,14 +26,14 @@ export default function AdminArea() {
         <AdminLayout>
           <Suspense fallback={<Spinner />}>
             <Routes>
-              <Route index element={<OverviewPage />} />
+              <Route index element={<QrLibraryPage />} />
+              <Route path="overview" element={<OverviewPage />} />
               <Route path="businesses" element={<BusinessesPage />} />
               <Route path="businesses/new" element={<BusinessFormPage />} />
               <Route path="businesses/:id" element={<BusinessDetailPage />} />
               <Route path="businesses/:id/edit" element={<BusinessFormPage />} />
-              <Route path="qr" element={<QrListPage />} />
-              <Route path="qr/new" element={<QrEditorPage />} />
-              <Route path="qr/:id" element={<QrEditorPage />} />
+              <Route path="qr" element={<QrLibraryPage />} />
+              <Route path="qr/:id" element={<QrStudio />} />
               <Route path="categories" element={<CategoriesPage />} />
               <Route path="files" element={<FilesPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />

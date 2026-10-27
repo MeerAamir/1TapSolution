@@ -17,6 +17,7 @@ export const QR_TYPES = [
   'contact_card',
   'custom_link',
   'landing_page',
+  'text',
 ] as const
 
 export type QrType = (typeof QR_TYPES)[number]
@@ -128,8 +129,14 @@ export const QR_TYPE_INFO: Record<QrType, QrTypeInfo> = {
     delivery: 'redirect',
   },
   landing_page: {
-    label: 'Landing page',
-    description: 'A page you compose from headings, text, images, buttons and documents.',
+    label: 'Multi-link page',
+    description: 'One page with many items: links, PDFs, text, phone, WhatsApp, contact card and more.',
+    mode: 'dynamic',
+    delivery: 'page',
+  },
+  text: {
+    label: 'Text',
+    description: 'Shows a message, instructions or any text, with a copy button.',
     mode: 'dynamic',
     delivery: 'page',
   },
@@ -158,7 +165,15 @@ export interface DestinationByType {
     address?: string
     note?: string
   }
-  landing_page: { title?: string }
+  landing_page: {
+    title?: string
+    subtitle?: string
+    accent?: string
+    avatar_file_id?: string
+    cover_file_id?: string
+    show_business?: boolean
+  }
+  text: { title?: string; text: string }
 }
 
 export type AnyDestination = DestinationByType[QrType]

@@ -86,6 +86,6 @@ test('the overview warns when the keep-alive has stopped', async ({ page, reques
   await db(`update app_heartbeat set last_beat = 'epoch'`)
   await keepAlive(request)
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'My QR codes' })).toBeVisible()
   await expect(page.getByText(/keep-alive job has not run/)).toHaveCount(0)
 })
