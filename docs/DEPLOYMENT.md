@@ -22,7 +22,9 @@ If you ever move to a new domain, keep the old one connected to the same Cloudfl
 
 ## 2. Apply the database migrations
 
-**Option A: SQL Editor (no tools needed).** Open **SQL Editor**, then paste and run each file **in order**:
+**Quickest: one file.** Open **SQL Editor → New query**, paste the whole of `supabase/setup-all.sql` (all migrations plus demo data, combined) and press **Run**. Use this on a new, empty project.
+
+**Option A: SQL Editor, file by file.** Open **SQL Editor**, then paste and run each file **in order**:
 
 1. `supabase/migrations/20261026000001_core_schema.sql`
 2. `supabase/migrations/20261026000002_security.sql`
