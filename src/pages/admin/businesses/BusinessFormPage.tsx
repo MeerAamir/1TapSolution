@@ -6,6 +6,7 @@ import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { BlockEditor, cleanBlockData, newKey, validateBlock, type DraftBlock } from '@/components/admin/BlockEditor'
 import { FilePickerDialog } from '@/components/admin/FilePicker'
+import { IMAGE_PRESETS } from '@/lib/image'
 import { PhonePreview } from '@/components/admin/PhonePreview'
 import { BusinessProfile } from '@/components/public/BusinessProfile'
 import { Button } from '@/components/ui/button'
@@ -622,6 +623,7 @@ export default function BusinessFormPage() {
         businessId={id ?? null}
         kind="image"
         title={picker === 'logo' ? 'Choose a logo' : 'Choose a cover image'}
+        crop={picker === 'logo' ? { ...IMAGE_PRESETS.logo, label: 'Adjust the logo' } : { ...IMAGE_PRESETS.cover, label: 'Adjust the cover image' }}
         onSelect={([f]) => {
           if (!f) return
           addFiles([f])

@@ -44,6 +44,7 @@ export function StudioQrCard({
   isStatic,
   state,
   logoUrl,
+  nameUnder,
 }: {
   content: string
   design: QrDesign
@@ -52,6 +53,8 @@ export function StudioQrCard({
   isStatic: boolean
   state: LiveState
   logoUrl?: string
+  /** Printed under the code when the design asks for it. */
+  nameUnder?: string
 }) {
   const [logoDataUrl, setLogoDataUrl] = useState<string>()
   const [busy, setBusy] = useState<string | null>(null)
@@ -66,7 +69,7 @@ export function StudioQrCard({
     }
   }, [design.logo, logoUrl])
 
-  const opts = { logoDataUrl }
+  const opts = { logoDataUrl, businessName: nameUnder }
   const file = safeFilename(name || 'qr-code')
 
   async function run(kind: string, fn: () => Promise<unknown> | unknown) {
@@ -84,8 +87,8 @@ export function StudioQrCard({
     <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
       <div className="grid gap-3 p-4">
         <StatusLine state={state} isStatic={isStatic} />
-        <div className="mx-auto w-full max-w-[16rem] rounded-xl bg-surface p-3">
-          <QrSvg text={content} design={design} logoDataUrl={logoDataUrl} label={`QR code for ${name}`} />
+        <div className="mx-auto w-full max-w-[13rem] rounded-xl bg-surface p-3 sm:max-w-[16rem]">
+          <QrSvg text={content} design={design} logoDataUrl={logoDataUrl} businessName={nameUnder} label={`QR code for ${name}`} />
         </div>
         {publicUrl && (
           <div className="flex items-center gap-1.5">

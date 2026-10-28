@@ -1,11 +1,14 @@
 import { ExternalLink, Wifi } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { BusinessProfile } from '@/components/public/BusinessProfile'
+import { fetchPublicBusiness } from '@/lib/public-api'
 import type { DraftBlock } from '@/components/admin/BlockEditor'
 import { cleanBlockData, validateBlock } from '@/components/admin/BlockEditor'
 import { LandingView } from '@/components/public/LandingView'
 import { QrDestinationView } from '@/components/public/QrDestinationView'
 import { redirectUrlFor } from '@/lib/qr/destinations'
 import type { QrType } from '@/lib/qr/types'
-import type { FileRecord, PublicBlock, PublicQrPayload } from '@/lib/types'
+import type { FileRecord, PublicBlock, PublicBusiness, PublicQrPayload } from '@/lib/types'
 import { toPublicFile } from './typeTiles'
 
 function Frame({ children }: { children: React.ReactNode }) {
@@ -25,6 +28,24 @@ function Explain({ title, children }: { title: string; children: React.ReactNode
       <div className="text-sm text-muted">{children}</div>
     </div>
   )
+}
+
+/** The live business page, exactly as visitors see it. */
+function BusinessPreview({ slug }: { slug?: string }) {
+  const [state, setState] = useState<{ slug?: string; business?: PublicBusiness | null }>({})
+  useEffect(() => {
+    if (!slug) return
+    const c = new AbortController()
+    fetchPublicBusiness(slug, c.signal)
+      .then((r) => setState({ slug, business: r.state === 'ok' ? r.business : null }))
+      .catch(() => setState({ slug, business: null }))
+    return () => c.abort()
+  }, [slug])
+  if (!slug) return <Explain title="Preview">Choose a business to see its page.</Explain>
+  if (state.slug !== slug) return <Explain title="Loading…">Getting the business page.</Explain>
+  if (!state.business)
+    return <Explain title="Business page unavailable">This business is paused or archived, so visitors would see “currently unavailable”.</Explain>
+  return <BusinessProfile business={state.business} />
 }
 
 /** Converts editor state to the blocks visitors see (incomplete items are left out, as on the live page). */
@@ -54,6 +75,7 @@ export function PhonePreview({
   blocks,
   files,
   fileId,
+  businessSlug,
 }: {
   type: QrType
   /** Parsed destination when valid, raw otherwise. */
@@ -62,6 +84,8 @@ export function PhonePreview({
   blocks: DraftBlock[]
   files: Map<string, FileRecord>
   fileId: string | null
+  /** For business-page codes: which business to show. */
+  businessSlug?: string
 }) {
   if (type === 'landing_page') {
     const file = (id: unknown) => (typeof id === 'string' && files.get(id) ? toPublicFile(files.get(id)!) : null)
@@ -104,7 +128,7 @@ export function PhonePreview({
   if (type === 'business_profile') {
     return (
       <Frame>
-        <Explain title="Opens the business page">Edit what it shows under Advanced → Businesses.</Explain>
+        <BusinessPreview slug={businessSlug} />
       </Frame>
     )
   }

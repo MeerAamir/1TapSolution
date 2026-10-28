@@ -1,4 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -8,10 +10,11 @@ import { UsagePanel } from '@/components/admin/UsagePanel'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, PageHeader } from '@/components/ui/data'
 import { Notice } from '@/components/ui/feedback'
+import { ConfirmDialog } from '@/components/ui/overlay'
 import { Field, Input } from '@/components/ui/form'
 import { config } from '@/config'
-import { recentActivity } from '@/lib/admin-api'
-import { getSupabase } from '@/lib/supabase'
+import { demoContentCounts, recentActivity, removeDemoContent } from '@/lib/admin-api'
+import { friendlyError, getSupabase } from '@/lib/supabase'
 import { useQuery } from '@/lib/use-query'
 import { formatDate } from '@/lib/utils'
 
@@ -34,6 +37,49 @@ function Row({ label, value, hint }: { label: string; value: string; hint?: stri
   )
 }
 
+function SampleContentCard() {
+  const counts = useQuery(demoContentCounts, [])
+  const [confirm, setConfirm] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const total = (counts.data?.businesses ?? 0) + (counts.data?.qr ?? 0)
+  if (!counts.data || total === 0) return null
+  return (
+    <Card>
+      <CardHeader
+        title="Sample content"
+        description={`${counts.data.businesses} sample businesses and ${counts.data.qr} sample QR codes came with the installation to show how things work. Their details are made up.`}
+      />
+      <div className="p-5 pt-0">
+        <Button variant="danger-outline" onClick={() => setConfirm(true)}>
+          <Trash2 /> Remove all sample content
+        </Button>
+      </div>
+      <ConfirmDialog
+        open={confirm}
+        onOpenChange={setConfirm}
+        loading={busy}
+        destructive
+        title="Remove all sample content?"
+        description={<p>The sample businesses and their QR codes are deleted. Anything you created yourself stays exactly as it is.</p>}
+        confirmLabel="Remove samples"
+        onConfirm={async () => {
+          setBusy(true)
+          try {
+            await removeDemoContent()
+            toast.success('Sample content removed')
+            counts.reload()
+          } catch (e) {
+            toast.error(friendlyError(e))
+          } finally {
+            setBusy(false)
+            setConfirm(false)
+          }
+        }}
+      />
+    </Card>
+  )
+}
+
 export default function SettingsPage() {
   const { user } = useAuth()
   const activity = useQuery(() => recentActivity(40), [])
@@ -46,6 +92,7 @@ export default function SettingsPage() {
       <div className="grid gap-6 xl:grid-cols-2">
         <div className="grid gap-6 self-start">
           <UsagePanel />
+          <SampleContentCard />
           <Card>
             <CardHeader title="Your account" />
             <dl className="divide-y divide-line px-5">

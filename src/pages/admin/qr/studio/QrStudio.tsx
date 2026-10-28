@@ -1,14 +1,45 @@
-import { ArrowLeft, ArrowLeftRight, BarChart3, CopyPlus, FileText, MoreHorizontal, Palette, Pause, Play, Settings2, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { toast } from 'sonner'
-import { BlockEditor, cleanBlockData, newKey, validateBlock, type DraftBlock } from '@/components/admin/BlockEditor'
-import { FilePickerDialog, UploadButton } from '@/components/admin/FilePicker'
-import { Button } from '@/components/ui/button'
-import { ErrorState, Notice, Spinner } from '@/components/ui/feedback'
-import { Field, Input, Select, Textarea } from '@/components/ui/form'
-import { ConfirmDialog, Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '@/components/ui/overlay'
-import { qrPublicUrl, storagePublicUrl } from '@/config'
+import {
+  ArrowLeft,
+  ArrowLeftRight,
+  BarChart3,
+  Check,
+  CopyPlus,
+  FileText,
+  MoreHorizontal,
+  Palette,
+  Pause,
+  Play,
+  Settings2,
+  Trash2,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
+import { toast } from "sonner";
+import {
+  BlockEditor,
+  cleanBlockData,
+  newKey,
+  validateBlock,
+  type DraftBlock,
+} from "@/components/admin/BlockEditor";
+import { FilePickerDialog, UploadButton } from "@/components/admin/FilePicker";
+import { Button } from "@/components/ui/button";
+import { ErrorState, Notice, Spinner } from "@/components/ui/feedback";
+import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import {
+  ConfirmDialog,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
+} from "@/components/ui/overlay";
+import { qrPublicUrl, storagePublicUrl } from "@/config";
 import {
   createQr,
   deleteQr,
@@ -21,59 +52,101 @@ import {
   saveBlocks,
   updateQr,
   workspaceBusinessId,
-} from '@/lib/admin-api'
-import { DEFAULT_DESIGN, parseDesign, type QrDesign } from '@/lib/qr/design'
-import { encodedContent } from '@/lib/qr/destinations'
-import { QR_TYPE_INFO, type QrType } from '@/lib/qr/types'
-import { friendlyError } from '@/lib/supabase'
-import type { FileRecord, QrCodeRecord } from '@/lib/types'
-import { useQuery } from '@/lib/use-query'
-import { cn, formatBytes } from '@/lib/utils'
-import { parseDestination } from '@/lib/validation/qr'
-import { DesignPanel } from '../DesignPanel'
-import { DestinationFields } from '../DestinationFields'
-import { QrScansPanel } from '../QrScansPanel'
-import { LandingHeaderFields } from './LandingHeaderFields'
-import { PhonePreview } from './PhonePreview'
-import { StudioQrCard, type LiveState } from './StudioQrCard'
-import { autoName, defaultDestination, TYPE_LABEL, TYPE_TILES, typeIcon } from './typeTiles'
+} from "@/lib/admin-api";
+import { DEFAULT_DESIGN, parseDesign, type QrDesign } from "@/lib/qr/design";
+import { encodedContent } from "@/lib/qr/destinations";
+import { QR_TYPE_INFO, type QrType } from "@/lib/qr/types";
+import { friendlyError } from "@/lib/supabase";
+import type { FileRecord, QrCodeRecord } from "@/lib/types";
+import { useQuery } from "@/lib/use-query";
+import { cn, formatBytes } from "@/lib/utils";
+import { parseDestination } from "@/lib/validation/qr";
+import { DesignPanel } from "../DesignPanel";
+import { DestinationFields } from "../DestinationFields";
+import { QrScansPanel } from "../QrScansPanel";
+import { LandingHeaderFields } from "./LandingHeaderFields";
+import { PhonePreview } from "./PhonePreview";
+import { StudioQrCard, type LiveState } from "./StudioQrCard";
+import { IMAGE_PRESETS } from "@/lib/image";
+import {
+  autoName,
+  defaultDestination,
+  TYPE_LABEL,
+  TYPE_TILES,
+  typeIcon,
+} from "./typeTiles";
 
-type Draft = Record<string, unknown>
-type BlockPayload = Array<{ type: DraftBlock['type']; data: Record<string, unknown> }>
+type Draft = Record<string, unknown>;
+type BlockPayload = Array<{
+  type: DraftBlock["type"];
+  data: Record<string, unknown>;
+}>;
 
-const URL_KEYS = ['url', 'website']
+const URL_KEYS = ["url", "website"];
 
 /** Lets people paste "example.com" without typing https://. */
 function withScheme(d: Draft): Draft {
-  const out = { ...d }
+  const out = { ...d };
   for (const k of URL_KEYS) {
-    const v = typeof out[k] === 'string' ? (out[k] as string).trim() : ''
-    if (v && !/^[a-z][a-z0-9+.-]*:/i.test(v) && /^[\w-]+(\.[\w-]+)+([/?#].*)?$/.test(v)) out[k] = `https://${v}`
+    const v = typeof out[k] === "string" ? (out[k] as string).trim() : "";
+    if (
+      v &&
+      !/^[a-z][a-z0-9+.-]*:/i.test(v) &&
+      /^[\w-]+(\.[\w-]+)+([/?#].*)?$/.test(v)
+    )
+      out[k] = `https://${v}`;
   }
-  return out
+  return out;
 }
 
 function initialFromStored(type: QrType, stored: Draft): Draft {
-  if (type === 'maps') return { ...stored, mode: stored.latitude !== undefined ? 'coordinates' : 'url' }
-  return { ...defaultDestination(type), ...stored }
+  if (type === "maps")
+    return {
+      ...stored,
+      mode: stored.latitude !== undefined ? "coordinates" : "url",
+    };
+  return { ...defaultDestination(type), ...stored };
 }
 
 const blockPayload = (blocks: DraftBlock[]): BlockPayload =>
-  blocks.filter((b) => !Object.keys(validateBlock(b)).length).map((b) => ({ type: b.type, data: cleanBlockData(b) }))
+  blocks
+    .filter((b) => !Object.keys(validateBlock(b)).length)
+    .map((b) => ({ type: b.type, data: cleanBlockData(b) }));
 
-function Section({ icon, title, children, defaultOpen = true }: { icon: ReactNode; title: string; children: ReactNode; defaultOpen?: boolean }) {
+function Section({
+  icon,
+  title,
+  children,
+  defaultOpen = true,
+}: {
+  icon: ReactNode;
+  title: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+}) {
   return (
-    <details open={defaultOpen} className="group rounded-2xl border border-line bg-white shadow-sm">
+    <details
+      open={defaultOpen}
+      className="group rounded-2xl border border-line bg-white shadow-sm"
+    >
       <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-4 text-[0.95rem] font-semibold [&::-webkit-details-marker]:hidden [&_svg]:size-4 [&_svg]:text-signal">
         {icon} {title}
-        <span className="ml-auto text-xs font-medium text-muted group-open:hidden">Show</span>
+        <span className="ml-auto text-xs font-medium text-muted group-open:hidden">
+          Show
+        </span>
       </summary>
       <div className="border-t border-line p-5">{children}</div>
     </details>
-  )
+  );
 }
 
-function TypePicker({ onPick, current }: { onPick: (t: QrType) => void; current?: QrType | null }) {
+function TypePicker({
+  onPick,
+  current,
+}: {
+  onPick: (t: QrType) => void;
+  current?: QrType | null;
+}) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
       {TYPE_TILES.map((t) => (
@@ -83,71 +156,77 @@ function TypePicker({ onPick, current }: { onPick: (t: QrType) => void; current?
           onClick={() => onPick(t.type)}
           aria-pressed={current === t.type}
           className={cn(
-            'group flex min-h-[7.5rem] flex-col items-start gap-2 rounded-2xl border bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-signal/50 hover:shadow-raise',
-            current === t.type ? 'border-signal ring-2 ring-signal/30' : 'border-line',
+            "group flex min-h-[7.5rem] flex-col items-start gap-2 rounded-2xl border bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-signal/50 hover:shadow-raise",
+            current === t.type
+              ? "border-signal ring-2 ring-signal/30"
+              : "border-line",
           )}
         >
-          <span className="grid h-11 w-11 place-items-center rounded-xl bg-signal-soft text-signal [&_svg]:size-5">{t.icon}</span>
+          <span className="grid h-11 w-11 place-items-center rounded-xl bg-signal-soft text-signal [&_svg]:size-5">
+            {t.icon}
+          </span>
           <span className="font-semibold">{t.label}</span>
           <span className="text-xs leading-snug text-muted">{t.hint}</span>
         </button>
       ))}
     </div>
-  )
+  );
 }
 
 export default function QrStudio() {
-  const { id = 'new' } = useParams()
-  const [params] = useSearchParams()
-  const navigate = useNavigate()
+  const { id = "new" } = useParams();
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
 
   // Saved record and the editable draft.
-  const [rec, setRec] = useState<QrCodeRecord | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(id !== 'new')
-  const [code, setCode] = useState('')
-  const [type, setType] = useState<QrType | null>(null)
-  const [destination, setDestination] = useState<Draft>({})
-  const [fileId, setFileId] = useState<string | null>(null)
-  const [design, setDesign] = useState<QrDesign>(DEFAULT_DESIGN)
-  const [blocks, setBlocks] = useState<DraftBlock[]>([])
-  const [name, setName] = useState('')
-  const [nameTouched, setNameTouched] = useState(false)
-  const [description, setDescription] = useState('')
-  const [businessId, setBusinessId] = useState<string | null>(null)
-  const [isWorkspace, setIsWorkspace] = useState(true)
-  const [files, setFiles] = useState<Map<string, FileRecord>>(new Map())
-  const [changingType, setChangingType] = useState(false)
-  const [view, setView] = useState<'qr' | 'phone'>('qr')
-  const [pdfPicker, setPdfPicker] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [scanCount, setScanCount] = useState(0)
+  const [rec, setRec] = useState<QrCodeRecord | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(id !== "new");
+  const [code, setCode] = useState("");
+  const [type, setType] = useState<QrType | null>(null);
+  const [destination, setDestination] = useState<Draft>({});
+  const [fileId, setFileId] = useState<string | null>(null);
+  const [design, setDesign] = useState<QrDesign>(DEFAULT_DESIGN);
+  const [blocks, setBlocks] = useState<DraftBlock[]>([]);
+  const [name, setName] = useState("");
+  const [nameTouched, setNameTouched] = useState(false);
+  const [description, setDescription] = useState("");
+  const [businessId, setBusinessId] = useState<string | null>(null);
+  const [isWorkspace, setIsWorkspace] = useState(true);
+  const [files, setFiles] = useState<Map<string, FileRecord>>(new Map());
+  const [changingType, setChangingType] = useState(false);
+  const [view, setView] = useState<"qr" | "phone">("qr");
+  const [pdfPicker, setPdfPicker] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [scanCount, setScanCount] = useState(0);
 
   // Autosave bookkeeping.
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const recRef = useRef<QrCodeRecord | null>(null)
-  const codeRef = useRef('')
-  const savedQrJson = useRef('')
-  const savedBlocksJson = useRef('')
-  const baseline = useRef(false)
-  const inFlight = useRef(false)
-  const again = useRef(false)
-  const pendingRef = useRef(false)
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const recRef = useRef<QrCodeRecord | null>(null);
+  const codeRef = useRef("");
+  const savedQrJson = useRef("");
+  const savedBlocksJson = useRef("");
+  const baseline = useRef(false);
+  const inFlight = useRef(false);
+  const again = useRef(false);
+  const pendingRef = useRef(false);
+  const errorRef = useRef<string | null>(null);
+  const [finishing, setFinishing] = useState(false);
 
-  const businesses = useQuery(listBusinessOptions, [])
+  const businesses = useQuery(listBusinessOptions, []);
 
   const addFiles = (list: FileRecord[]) =>
     setFiles((cur) => {
-      const next = new Map(cur)
-      for (const f of list) next.set(f.id, f)
-      return next
-    })
+      const next = new Map(cur);
+      for (const f of list) next.set(f.id, f);
+      return next;
+    });
 
   async function loadFiles(owner: string) {
     try {
-      addFiles(await listFilesForPicker(owner))
+      addFiles(await listFilesForPicker(owner));
     } catch {
       // Previews of images just stay empty.
     }
@@ -155,92 +234,112 @@ export default function QrStudio() {
 
   // ---- Load an existing code, or prepare a new one -------------------------------------------
   useEffect(() => {
-    let active = true
-    if (id === 'new') {
+    let active = true;
+    if (id === "new") {
       if (recRef.current) {
         // "Create QR" pressed while editing: start over.
-        recRef.current = null
-        setRec(null)
+        recRef.current = null;
+        setRec(null);
       }
-      setType(null)
-      setLoading(false)
-      setLoadError(null)
-      setChangingType(false)
-      const fromBusiness = params.get('business')
-      ;(fromBusiness ? Promise.resolve(fromBusiness) : workspaceBusinessId())
+      setType(null);
+      setLoading(false);
+      setLoadError(null);
+      setChangingType(false);
+      const fromBusiness = params.get("business");
+      (fromBusiness ? Promise.resolve(fromBusiness) : workspaceBusinessId())
         .then((owner) => {
-          if (!active) return
-          setBusinessId(owner)
-          setIsWorkspace(!fromBusiness)
-          void loadFiles(owner)
+          if (!active) return;
+          setBusinessId(owner);
+          setIsWorkspace(!fromBusiness);
+          void loadFiles(owner);
         })
-        .catch((e) => active && setLoadError(friendlyError(e)))
+        .catch((e) => active && setLoadError(friendlyError(e)));
       return () => {
-        active = false
-      }
+        active = false;
+      };
     }
-    if (recRef.current?.id === id) return // we just created it; keep editing
-    setLoading(true)
+    if (recRef.current?.id === id) return; // we just created it; keep editing
+    setLoading(true);
     getQr(id)
       .then(async (q) => {
-        if (!active) return
-        recRef.current = q
-        setRec(q)
-        setScanCount(Number(q.scan_count ?? 0))
-        codeRef.current = q.public_code
-        setCode(q.public_code)
-        setType(q.type)
-        setDestination(initialFromStored(q.type, q.destination))
-        setFileId(q.file_id)
-        setDesign(parseDesign(q.design))
-        setName(q.name)
-        setNameTouched(true)
-        setDescription(q.description ?? '')
-        setBusinessId(q.business_id)
-        setIsWorkspace(Boolean(q.business_is_workspace))
-        void loadFiles(q.business_id)
-        let loadedBlocks: DraftBlock[] = []
-        if (q.type === 'landing_page') {
-          loadedBlocks = (await listBlocks(q.business_id, q.id)).map((b) => ({ key: newKey(), type: b.type, data: b.data }))
+        if (!active) return;
+        recRef.current = q;
+        setRec(q);
+        setScanCount(Number(q.scan_count ?? 0));
+        codeRef.current = q.public_code;
+        setCode(q.public_code);
+        setType(q.type);
+        setDestination(initialFromStored(q.type, q.destination));
+        setFileId(q.file_id);
+        setDesign(parseDesign(q.design));
+        setName(q.name);
+        setNameTouched(true);
+        setDescription(q.description ?? "");
+        setBusinessId(q.business_id);
+        setIsWorkspace(Boolean(q.business_is_workspace));
+        void loadFiles(q.business_id);
+        let loadedBlocks: DraftBlock[] = [];
+        if (q.type === "landing_page") {
+          loadedBlocks = (await listBlocks(q.business_id, q.id)).map((b) => ({
+            key: newKey(),
+            type: b.type,
+            data: b.data,
+          }));
         }
-        if (!active) return
-        setBlocks(loadedBlocks)
-        baseline.current = true // the first computed snapshot is "already saved"
-        setLoading(false)
+        if (!active) return;
+        setBlocks(loadedBlocks);
+        baseline.current = true; // the first computed snapshot is "already saved"
+        setLoading(false);
       })
       .catch((e) => {
         if (active) {
-          setLoadError(friendlyError(e))
-          setLoading(false)
+          setLoadError(friendlyError(e));
+          setLoading(false);
         }
-      })
+      });
     return () => {
-      active = false
-    }
+      active = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
+  }, [id]);
 
   // ---- Derived state --------------------------------------------------------------------------
-  const normalized = useMemo(() => withScheme(destination), [destination])
-  const parsed = useMemo(() => (type ? parseDestination(type, normalized) : null), [type, normalized])
-  const file = fileId ? files.get(fileId) : undefined
-  const businessName = !isWorkspace ? businesses.data?.find((b) => b.id === businessId)?.name : undefined
-  const finalName = (nameTouched && name.trim()) || (type ? autoName(type, normalized, { fileTitle: file?.title, businessName }) : '')
+  const normalized = useMemo(() => withScheme(destination), [destination]);
+  const parsed = useMemo(
+    () => (type ? parseDestination(type, normalized) : null),
+    [type, normalized],
+  );
+  const file = fileId ? files.get(fileId) : undefined;
+  const businessName = !isWorkspace
+    ? businesses.data?.find((b) => b.id === businessId)?.name
+    : undefined;
+  const finalName =
+    (nameTouched && name.trim()) ||
+    (type
+      ? autoName(type, normalized, { fileTitle: file?.title, businessName })
+      : "");
 
-  let missing: string | null = null
-  if (type && parsed && !parsed.ok) missing = Object.values(parsed.errors)[0] ?? 'Fill in the details'
-  else if (type === 'document' && !fileId) missing = 'Upload or choose a PDF to make it live'
-  else if (type === 'business_profile' && (isWorkspace || !businessId)) missing = 'Choose a business'
-  else if (!businessId) missing = 'Getting ready…'
+  let missing: string | null = null;
+  if (type && parsed && !parsed.ok)
+    missing = Object.values(parsed.errors)[0] ?? "Fill in the details";
+  else if (type === "document" && !fileId)
+    missing = "Upload or choose a PDF to make it live";
+  else if (type === "business_profile" && (isWorkspace || !businessId))
+    missing = "Choose a business";
+  else if (!businessId) missing = "Getting ready…";
 
   // Only show a field's error once something has been typed in it.
   const shownErrors = useMemo(() => {
-    if (!parsed || parsed.ok) return {}
-    return Object.fromEntries(Object.entries(parsed.errors).filter(([k]) => String(destination[k] ?? '').trim() !== ''))
-  }, [parsed, destination])
+    if (!parsed || parsed.ok) return {};
+    return Object.fromEntries(
+      Object.entries(parsed.errors).filter(
+        ([k]) => String(destination[k] ?? "").trim() !== "",
+      ),
+    );
+  }, [parsed, destination]);
 
   const snapshot = useMemo(() => {
-    if (!type || !parsed?.ok || missing || !businessId) return null
+    if (!type || !parsed?.ok || missing || !businessId) return null;
     return {
       qr: {
         business_id: businessId,
@@ -248,178 +347,265 @@ export default function QrStudio() {
         description: description.trim() || null,
         type,
         destination: parsed.value,
-        file_id: type === 'document' ? fileId : null,
+        file_id: type === "document" ? fileId : null,
         design: design as unknown as Record<string, unknown>,
       },
-      blocks: type === 'landing_page' ? blockPayload(blocks) : null,
-    }
-  }, [type, parsed, missing, businessId, finalName, description, fileId, design, blocks])
+      blocks: type === "landing_page" ? blockPayload(blocks) : null,
+    };
+  }, [
+    type,
+    parsed,
+    missing,
+    businessId,
+    finalName,
+    description,
+    fileId,
+    design,
+    blocks,
+  ]);
 
-  const latest = useRef(snapshot)
-  latest.current = snapshot
+  const latest = useRef(snapshot);
+  latest.current = snapshot;
 
   // ---- Autosave -------------------------------------------------------------------------------
   async function flush() {
     if (inFlight.current) {
-      again.current = true
-      return
+      again.current = true;
+      return;
     }
-    const snap = latest.current
-    if (!snap) return
-    inFlight.current = true
-    setSaving(true)
+    const snap = latest.current;
+    if (!snap) return;
+    inFlight.current = true;
+    setSaving(true);
     try {
-      const qrJson = JSON.stringify(snap.qr)
-      let r = recRef.current
+      const qrJson = JSON.stringify(snap.qr);
+      let r = recRef.current;
       if (!r) {
         try {
-          r = await createQr({ ...snap.qr, public_code: codeRef.current })
+          r = await createQr({ ...snap.qr, public_code: codeRef.current });
         } catch (e) {
           // Astronomically unlikely clash of the random code: pick another and retry once.
-          if ((e as { code?: string }).code !== '23505') throw e
-          codeRef.current = newPublicCode()
-          setCode(codeRef.current)
-          r = await createQr({ ...snap.qr, public_code: codeRef.current })
+          if ((e as { code?: string }).code !== "23505") throw e;
+          codeRef.current = newPublicCode();
+          setCode(codeRef.current);
+          r = await createQr({ ...snap.qr, public_code: codeRef.current });
         }
-        recRef.current = r
-        setRec(r)
-        savedQrJson.current = qrJson
-        navigate(`/admin/qr/${r.id}`, { replace: true })
+        recRef.current = r;
+        setRec(r);
+        savedQrJson.current = qrJson;
+        navigate(`/admin/qr/${r.id}`, { replace: true });
       } else if (qrJson !== savedQrJson.current) {
-        r = await updateQr(r.id, snap.qr)
-        recRef.current = r
-        setRec(r)
-        savedQrJson.current = qrJson
+        r = await updateQr(r.id, snap.qr);
+        recRef.current = r;
+        setRec(r);
+        savedQrJson.current = qrJson;
       }
       if (snap.blocks) {
-        const bJson = JSON.stringify(snap.blocks)
+        const bJson = JSON.stringify(snap.blocks);
         if (bJson !== savedBlocksJson.current) {
-          await saveBlocks(r.business_id, r.id, snap.blocks)
-          savedBlocksJson.current = bJson
+          await saveBlocks(r.business_id, r.id, snap.blocks);
+          savedBlocksJson.current = bJson;
         }
       }
-      setSaveError(null)
+      setSaveError(null);
+      errorRef.current = null;
     } catch (e) {
-      setSaveError(friendlyError(e))
+      errorRef.current = friendlyError(e);
+      setSaveError(errorRef.current);
     } finally {
-      inFlight.current = false
-      pendingRef.current = false
-      setSaving(false)
+      inFlight.current = false;
+      pendingRef.current = false;
+      setSaving(false);
       if (again.current) {
-        again.current = false
-        void flush()
+        again.current = false;
+        void flush();
       }
     }
   }
 
-  const snapshotKey = snapshot ? JSON.stringify(snapshot) : ''
+  /** Saves whatever is pending right now and reports whether everything is stored. */
+  async function saveNow(): Promise<boolean> {
+    const wait = () => new Promise((r) => setTimeout(r, 80));
+    if (!latest.current) {
+      toast.error(
+        missing ? `Not saved yet: ${missing}` : "Fill in the details first.",
+      );
+      return false;
+    }
+    while (inFlight.current) await wait();
+    const snap = latest.current;
+    const needs =
+      !recRef.current ||
+      JSON.stringify(snap.qr) !== savedQrJson.current ||
+      JSON.stringify(snap.blocks) !== savedBlocksJson.current;
+    if (needs) await flush();
+    while (inFlight.current) await wait();
+    if (errorRef.current) {
+      toast.error(`Not saved: ${errorRef.current}`);
+      return false;
+    }
+    return Boolean(recRef.current);
+  }
+
+  async function saveAndFinish() {
+    setFinishing(true);
+    try {
+      if (await saveNow()) {
+        toast.success("Saved. You will find it in My QR codes.");
+        navigate("/admin");
+      }
+    } finally {
+      setFinishing(false);
+    }
+  }
+
+  const snapshotKey = snapshot ? JSON.stringify(snapshot) : "";
   useEffect(() => {
-    if (!snapshot) return
+    if (!snapshot) return;
     if (baseline.current) {
-      baseline.current = false
-      savedQrJson.current = JSON.stringify(snapshot.qr)
-      savedBlocksJson.current = JSON.stringify(snapshot.blocks)
-      return
+      baseline.current = false;
+      savedQrJson.current = JSON.stringify(snapshot.qr);
+      savedBlocksJson.current = JSON.stringify(snapshot.blocks);
+      return;
     }
     const unchanged =
-      recRef.current && JSON.stringify(snapshot.qr) === savedQrJson.current && JSON.stringify(snapshot.blocks) === savedBlocksJson.current
-    if (unchanged) return
-    pendingRef.current = true
-    const t = setTimeout(() => void flush(), recRef.current ? 700 : 300)
-    return () => clearTimeout(t)
+      recRef.current &&
+      JSON.stringify(snapshot.qr) === savedQrJson.current &&
+      JSON.stringify(snapshot.blocks) === savedBlocksJson.current;
+    if (unchanged) return;
+    pendingRef.current = true;
+    const t = setTimeout(() => void flush(), recRef.current ? 700 : 300);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snapshotKey])
+  }, [snapshotKey]);
 
   // Save straight away when leaving the page, and warn if the browser is closed mid-save.
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
-      if (pendingRef.current || inFlight.current) e.preventDefault()
-    }
-    window.addEventListener('beforeunload', warn)
+      if (pendingRef.current || inFlight.current) e.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
     return () => {
-      window.removeEventListener('beforeunload', warn)
-      if (pendingRef.current) void flush()
-    }
+      window.removeEventListener("beforeunload", warn);
+      if (pendingRef.current) void flush();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []);
 
   // ---- Actions --------------------------------------------------------------------------------
   function pickType(t: QrType) {
     if (!codeRef.current) {
-      codeRef.current = newPublicCode()
-      setCode(codeRef.current)
+      codeRef.current = newPublicCode();
+      setCode(codeRef.current);
     }
-    setType(t)
-    setDestination(defaultDestination(t))
-    setFileId(null)
-    setChangingType(false)
-    if (t === 'business_profile' && isWorkspace) setBusinessId(null)
-    if (t === 'landing_page' && !blocks.length) setBlocks([{ key: newKey(), type: 'link', data: {} }])
+    setType(t);
+    setDestination(defaultDestination(t));
+    setFileId(null);
+    setChangingType(false);
+    if (t === "business_profile" && isWorkspace) setBusinessId(null);
+    if (t === "landing_page" && !blocks.length)
+      setBlocks([{ key: newKey(), type: "link", data: {} }]);
   }
 
-  async function lifecycle(patch: { status?: 'active' | 'inactive' }, message: string) {
-    if (!recRef.current) return
-    setBusy(true)
+  async function lifecycle(
+    patch: { status?: "active" | "inactive" },
+    message: string,
+  ) {
+    if (!recRef.current) return;
+    setBusy(true);
     try {
-      const r = await updateQr(recRef.current.id, patch)
-      recRef.current = r
-      setRec(r)
-      toast.success(message)
+      const r = await updateQr(recRef.current.id, patch);
+      recRef.current = r;
+      setRec(r);
+      toast.success(message);
     } catch (e) {
-      toast.error(friendlyError(e))
+      toast.error(friendlyError(e));
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
   }
 
   // ---- Render ---------------------------------------------------------------------------------
-  if (loadError) return <ErrorState message={loadError} onRetry={() => window.location.reload()} />
-  if (loading) return <Spinner />
+  if (loadError)
+    return (
+      <ErrorState
+        message={loadError}
+        onRetry={() => window.location.reload()}
+      />
+    );
+  if (loading) return <Spinner />;
 
   if (!type) {
     return (
       <div className="mx-auto max-w-5xl">
-        <Link to="/admin" className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink">
+        <Link
+          to="/admin"
+          className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink"
+        >
           <ArrowLeft className="size-4" /> My QR codes
         </Link>
-        <h1 className="mt-3 text-2xl font-bold tracking-[-0.02em]">Create a QR code</h1>
-        <p className="mt-1 text-muted">What should happen when someone scans it?</p>
+        <h1 className="mt-3 text-2xl font-bold tracking-[-0.02em]">
+          Create a QR code
+        </h1>
+        <p className="mt-1 text-muted">
+          What should happen when someone scans it?
+        </p>
         <div className="mt-6">
           <TypePicker onPick={pickType} />
         </div>
       </div>
-    )
+    );
   }
 
-  const info = QR_TYPE_INFO[type]
-  const isStatic = info.mode === 'static'
-  const publicUrl = code ? qrPublicUrl(code) : ''
+  const info = QR_TYPE_INFO[type];
+  const isStatic = info.mode === "static";
+  const publicUrl = code ? qrPublicUrl(code) : "";
   const content = (() => {
     try {
-      return encodedContent(type, parsed?.ok ? parsed.value : normalized, publicUrl)
+      return encodedContent(
+        type,
+        parsed?.ok ? parsed.value : normalized,
+        publicUrl,
+      );
     } catch {
-      return publicUrl
+      return publicUrl;
     }
-  })()
-  const wifiIncomplete = type === 'wifi' && !parsed?.ok
+  })();
+  const wifiIncomplete = type === "wifi" && !parsed?.ok;
 
-  const avatar = type === 'landing_page' && typeof destination.avatar_file_id === 'string' ? files.get(destination.avatar_file_id) : undefined
-  const logoFile = avatar
+  const avatar =
+    type === "landing_page" && typeof destination.avatar_file_id === "string"
+      ? files.get(destination.avatar_file_id)
+      : undefined;
+  const businessLogo = !isWorkspace
+    ? files.get(
+        businesses.data?.find((b) => b.id === businessId)?.logo_file_id ?? "",
+      )
+    : undefined;
+  const suggestedLogo = avatar ?? businessLogo;
+  const logoFile =
+    (design.logoFileId ? files.get(design.logoFileId) : undefined) ??
+    suggestedLogo;
+  const nameUnder =
+    businessName && type === "business_profile" ? businessName : finalName;
   const liveState: LiveState = saveError
-    ? { kind: 'error', message: `Not saved: ${saveError}` }
+    ? { kind: "error", message: `Not saved: ${saveError}` }
     : missing
-      ? { kind: 'incomplete', message: rec ? `Not saved: ${missing}` : missing }
+      ? { kind: "incomplete", message: rec ? `Not saved: ${missing}` : missing }
       : saving || pendingRef.current || !rec
-        ? { kind: 'saving' }
-        : rec.status !== 'active' || rec.archived_at
-          ? { kind: 'paused', message: 'Paused. Scans show “currently unavailable”.' }
-          : { kind: 'live' }
+        ? { kind: "saving" }
+        : rec.status !== "active" || rec.archived_at
+          ? {
+              kind: "paused",
+              message: "Paused. Scans show “currently unavailable”.",
+            }
+          : { kind: "live" };
 
-  const canChangeType = !rec || (rec.type !== 'wifi' && type !== 'wifi')
+  const canChangeType = !rec || (rec.type !== "wifi" && type !== "wifi");
 
   const contentFields = (() => {
     switch (type) {
-      case 'landing_page':
+      case "landing_page":
         return (
           <div className="grid gap-6">
             <LandingHeaderFields
@@ -434,16 +620,26 @@ export default function QrStudio() {
             <div className="grid gap-3">
               <div>
                 <h3 className="font-semibold">Items on the page</h3>
-                <p className="text-sm text-muted">Add as many as you like. Use the arrows to change the order. Items appear once they are complete.</p>
+                <p className="text-sm text-muted">
+                  Add as many as you like. Use the arrows to change the order.
+                  Items appear once they are complete.
+                </p>
               </div>
               <BlockEditor
                 blocks={blocks}
                 onChange={setBlocks}
                 errors={Object.fromEntries(
                   blocks.map((b) => {
-                    const e = validateBlock(b)
+                    const e = validateBlock(b);
                     // Only complain about fields that have something in them.
-                    return [b.key, Object.fromEntries(Object.entries(e).filter(([k]) => String(b.data[k] ?? '').trim() !== ''))]
+                    return [
+                      b.key,
+                      Object.fromEntries(
+                        Object.entries(e).filter(
+                          ([k]) => String(b.data[k] ?? "").trim() !== "",
+                        ),
+                      ),
+                    ];
                   }),
                 )}
                 files={[...files.values()]}
@@ -452,12 +648,21 @@ export default function QrStudio() {
               />
             </div>
           </div>
-        )
-      case 'text':
+        );
+      case "text":
         return (
           <div className="grid gap-4">
             <Field label="Title" hint="Optional">
-              {(p) => <Input {...p} maxLength={160} value={String(destination.title ?? '')} onChange={(e) => setDestination({ ...destination, title: e.target.value })} />}
+              {(p) => (
+                <Input
+                  {...p}
+                  maxLength={160}
+                  value={String(destination.title ?? "")}
+                  onChange={(e) =>
+                    setDestination({ ...destination, title: e.target.value })
+                  }
+                />
+              )}
             </Field>
             <Field label="Text" required error={shownErrors.text}>
               {(p) => (
@@ -466,14 +671,16 @@ export default function QrStudio() {
                   rows={7}
                   maxLength={4000}
                   placeholder="Type or paste the text people will see"
-                  value={String(destination.text ?? '')}
-                  onChange={(e) => setDestination({ ...destination, text: e.target.value })}
+                  value={String(destination.text ?? "")}
+                  onChange={(e) =>
+                    setDestination({ ...destination, text: e.target.value })
+                  }
                 />
               )}
             </Field>
           </div>
-        )
-      case 'document':
+        );
+      case "document":
         return (
           <div className="grid gap-4">
             <div className="flex flex-wrap items-center gap-3">
@@ -481,27 +688,45 @@ export default function QrStudio() {
                 <span className="inline-flex items-center gap-2 rounded-lg bg-surface px-3 py-2 text-sm ring-1 ring-line">
                   <FileText className="size-4 text-muted" />
                   <span className="font-medium">{file.title}</span>
-                  <span className="text-muted">{formatBytes(file.size_bytes)}</span>
+                  <span className="text-muted">
+                    {formatBytes(file.size_bytes)}
+                  </span>
                 </span>
               ) : null}
               <UploadButton
                 businessId={businessId}
                 kind="document"
-                variant={file ? 'secondary' : 'primary'}
-                label={file ? 'Upload a new PDF' : 'Upload PDF'}
+                variant={file ? "secondary" : "primary"}
+                label={file ? "Upload a new PDF" : "Upload PDF"}
                 onUploaded={(f) => {
-                  addFiles([f])
-                  setFileId(f.id)
+                  addFiles([f]);
+                  setFileId(f.id);
                 }}
               />
-              <Button type="button" variant="ghost" size="sm" onClick={() => setPdfPicker(true)}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setPdfPicker(true)}
+              >
                 Choose from my files
               </Button>
             </div>
             <Field label="When scanned">
               {(p) => (
-                <Select {...p} value={String(destination.open_mode ?? 'page')} onChange={(e) => setDestination({ ...destination, open_mode: e.target.value })}>
-                  <option value="page">Show a page with Open and Download buttons</option>
+                <Select
+                  {...p}
+                  value={String(destination.open_mode ?? "page")}
+                  onChange={(e) =>
+                    setDestination({
+                      ...destination,
+                      open_mode: e.target.value,
+                    })
+                  }
+                >
+                  <option value="page">
+                    Show a page with Open and Download buttons
+                  </option>
                   <option value="direct">Open the PDF directly</option>
                 </Select>
               )}
@@ -514,14 +739,14 @@ export default function QrStudio() {
               selected={fileId ? [fileId] : []}
               onSelect={([f]) => {
                 if (f) {
-                  addFiles([f])
-                  setFileId(f.id)
+                  addFiles([f]);
+                  setFileId(f.id);
                 }
               }}
             />
           </div>
-        )
-      case 'business_profile':
+        );
+      case "business_profile":
         return (
           <div className="grid gap-4">
             {!rec && (
@@ -529,17 +754,20 @@ export default function QrStudio() {
                 {(p) => (
                   <Select
                     {...p}
-                    value={isWorkspace ? '' : (businessId ?? '')}
+                    value={isWorkspace ? "" : (businessId ?? "")}
                     onChange={(e) => {
-                      setBusinessId(e.target.value || null)
-                      setIsWorkspace(false)
-                      if (e.target.value) void loadFiles(e.target.value)
+                      setBusinessId(e.target.value || null);
+                      setIsWorkspace(false);
+                      if (e.target.value) void loadFiles(e.target.value);
                     }}
                   >
                     <option value="">Choose a business</option>
                     {businesses.data?.map((b) => (
                       <option key={b.id} value={b.id}>
                         {b.name}
+                        {b.is_demo && !b.name.includes("(Demo)")
+                          ? " (Demo)"
+                          : ""}
                       </option>
                     ))}
                   </Select>
@@ -548,18 +776,44 @@ export default function QrStudio() {
             )}
             {!businesses.data?.length && (
               <Notice tone="info">
-                No businesses yet. Add one under{' '}
-                <Link to="/admin/businesses/new" className="font-semibold text-signal hover:underline">
+                No businesses yet. Add one under{" "}
+                <Link
+                  to="/admin/businesses/new"
+                  className="font-semibold text-signal hover:underline"
+                >
                   Advanced → Businesses
                 </Link>
                 .
               </Notice>
             )}
+            {!isWorkspace &&
+              businesses.data?.find((b) => b.id === businessId)?.is_demo && (
+                <Notice tone="warning">
+                  This is a <strong>sample business</strong> with made-up
+                  details, so its page shows demo content. Pick your own
+                  business, or remove all sample content in{" "}
+                  <Link
+                    to="/admin/settings"
+                    className="font-semibold text-signal hover:underline"
+                  >
+                    Settings
+                  </Link>
+                  .
+                </Notice>
+              )}
             {!isWorkspace && businessId && (
-              <DestinationFields type={type} value={destination} onChange={setDestination} errors={{}} businessId={businessId} fileId={null} onFileChange={() => {}} />
+              <DestinationFields
+                type={type}
+                value={destination}
+                onChange={setDestination}
+                errors={{}}
+                businessId={businessId}
+                fileId={null}
+                onFileChange={() => {}}
+              />
             )}
           </div>
-        )
+        );
       default:
         return (
           <DestinationFields
@@ -571,55 +825,78 @@ export default function QrStudio() {
             fileId={fileId}
             file={file}
             onFileChange={(f) => {
-              if (f) addFiles([f])
-              setFileId(f?.id ?? null)
+              if (f) addFiles([f]);
+              setFileId(f?.id ?? null);
             }}
           />
-        )
+        );
     }
-  })()
+  })();
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-6xl pb-24 sm:pb-0">
       {/* Header */}
       <div className="mb-5 flex flex-wrap items-center gap-3">
-        <Link to="/admin" className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink">
+        <Link
+          to="/admin"
+          className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink"
+        >
           <ArrowLeft className="size-4" /> My QR codes
         </Link>
       </div>
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-signal-soft text-signal [&_svg]:size-5">{typeIcon(type)}</span>
-        <div className="min-w-0 flex-1">
-          <input
-            aria-label="QR code name"
-            value={nameTouched ? name : finalName}
-            placeholder={finalName}
-            maxLength={120}
-            onChange={(e) => {
-              setName(e.target.value)
-              setNameTouched(true)
-            }}
-            onBlur={() => {
-              if (!name.trim()) setNameTouched(false)
-            }}
-            className="w-full rounded-md bg-transparent px-1 py-0.5 text-2xl font-bold tracking-[-0.02em] outline-none ring-signal/40 hover:bg-white focus:bg-white focus:ring-2"
-          />
-          <p className="px-1 text-sm text-muted">
-            {TYPE_LABEL[type]}
-            {!isWorkspace && businessName ? ` · ${businessName}` : ''}
-            {rec ? ' · changes save automatically' : ''}
-          </p>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-signal-soft text-signal [&_svg]:size-5">
+            {typeIcon(type)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <input
+              aria-label="QR code name"
+              value={nameTouched ? name : finalName}
+              placeholder={finalName}
+              maxLength={120}
+              onChange={(e) => {
+                setName(e.target.value);
+                setNameTouched(true);
+              }}
+              onBlur={() => {
+                if (!name.trim()) setNameTouched(false);
+              }}
+              className="w-full rounded-md bg-transparent px-1 py-0.5 text-2xl font-bold tracking-[-0.02em] outline-none ring-signal/40 hover:bg-white focus:bg-white focus:ring-2"
+            />
+            <p className="px-1 text-sm text-muted">
+              {TYPE_LABEL[type]}
+              {!isWorkspace && businessName ? ` · ${businessName}` : ""}
+              {rec ? " · changes save automatically" : ""}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            className="hidden sm:inline-flex"
+            onClick={() => void saveAndFinish()}
+            loading={finishing}
+            disabled={Boolean(missing) && !rec}
+          >
+            {!finishing && <Check />} Save &amp; finish
+          </Button>
           {canChangeType && (
-            <Button variant="secondary" size="sm" onClick={() => setChangingType((v) => !v)}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setChangingType((v) => !v)}
+            >
               <ArrowLeftRight /> Change type
             </Button>
           )}
           {rec && (
             <Menu>
               <MenuTrigger asChild>
-                <Button variant="secondary" size="icon" aria-label="More actions">
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  aria-label="More actions"
+                >
                   <MoreHorizontal />
                 </Button>
               </MenuTrigger>
@@ -627,22 +904,37 @@ export default function QrStudio() {
                 <MenuItem
                   onSelect={async () => {
                     try {
-                      const copy = await duplicateQr(rec)
-                      toast.success('Copied. The copy has its own new QR code.')
-                      navigate(`/admin/qr/${copy.id}`)
+                      const copy = await duplicateQr(rec);
+                      toast.success(
+                        "Copied. The copy has its own new QR code.",
+                      );
+                      navigate(`/admin/qr/${copy.id}`);
                     } catch (e) {
-                      toast.error(friendlyError(e))
+                      toast.error(friendlyError(e));
                     }
                   }}
                 >
                   <CopyPlus /> Duplicate
                 </MenuItem>
-                {rec.status === 'active' ? (
-                  <MenuItem disabled={busy} onSelect={() => lifecycle({ status: 'inactive' }, 'Paused. Scans now show “currently unavailable”.')}>
+                {rec.status === "active" ? (
+                  <MenuItem
+                    disabled={busy}
+                    onSelect={() =>
+                      lifecycle(
+                        { status: "inactive" },
+                        "Paused. Scans now show “currently unavailable”.",
+                      )
+                    }
+                  >
                     <Pause /> Pause
                   </MenuItem>
                 ) : (
-                  <MenuItem disabled={busy} onSelect={() => lifecycle({ status: 'active' }, 'Live again')}>
+                  <MenuItem
+                    disabled={busy}
+                    onSelect={() =>
+                      lifecycle({ status: "active" }, "Live again")
+                    }
+                  >
                     <Play /> Resume
                   </MenuItem>
                 )}
@@ -659,7 +951,10 @@ export default function QrStudio() {
       {changingType && (
         <div className="mb-6 rounded-2xl border border-signal/30 bg-signal-soft/40 p-4">
           <p className="mb-3 text-sm font-medium">
-            Pick a new type. {rec ? 'The printed code stays the same and will open the new content.' : ''}
+            Pick a new type.{" "}
+            {rec
+              ? "The printed code stays the same and will open the new content."
+              : ""}
           </p>
           <TypePicker onPick={pickType} current={type} />
         </div>
@@ -668,28 +963,79 @@ export default function QrStudio() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="grid min-w-0 content-start gap-5">
           <section className="rounded-2xl border border-line bg-white p-5 shadow-sm">
-            <h2 className="mb-1 text-[0.95rem] font-semibold">{type === 'landing_page' ? 'Your page' : 'Content'}</h2>
+            <h2 className="mb-1 text-[0.95rem] font-semibold">
+              {type === "landing_page" ? "Your page" : "Content"}
+            </h2>
             <p className="mb-4 text-sm text-muted">{info.description}</p>
             {contentFields}
           </section>
 
-          <Section icon={<Palette />} title="Customize the QR design" defaultOpen={false}>
-            <DesignPanel design={design} onChange={setDesign} hasLogo={Boolean(logoFile)} />
-            {!logoFile && (
-              <p className="mt-3 text-xs text-muted">
-                {type === 'landing_page' ? 'Add a profile image to the page to put it in the middle of the code.' : 'Logos in the code are available for multi-link pages with a profile image.'}
-              </p>
-            )}
+          <Section
+            icon={<Palette />}
+            title="Customize the QR design"
+            defaultOpen={false}
+          >
+            <DesignPanel
+              design={design}
+              onChange={(d) =>
+                setDesign(
+                  d.logo && !d.logoFileId && logoFile
+                    ? { ...d, logoFileId: logoFile.id }
+                    : d,
+                )
+              }
+              hasLogo={Boolean(logoFile)}
+              logoControl={
+                <div className="flex flex-wrap items-center gap-3">
+                  {logoFile && (
+                    <img
+                      src={storagePublicUrl(
+                        logoFile.storage_path,
+                        logoFile.version,
+                      )}
+                      alt="Current logo"
+                      className="h-12 w-12 rounded-lg bg-white object-contain p-1 ring-1 ring-line"
+                    />
+                  )}
+                  <UploadButton
+                    businessId={businessId}
+                    kind="image"
+                    size="sm"
+                    label={logoFile ? "Upload a different logo" : "Upload logo"}
+                    crop={{ ...IMAGE_PRESETS.logo, label: "Adjust the logo" }}
+                    onUploaded={(f) => {
+                      addFiles([f]);
+                      setDesign({ ...design, logo: true, logoFileId: f.id });
+                    }}
+                  />
+                </div>
+              }
+            />
           </Section>
 
           <Section icon={<Settings2 />} title="Details" defaultOpen={false}>
             <div className="grid gap-4">
-              <Field label="Private note" hint="Only you see this, e.g. where the code is printed.">
-                {(p) => <Textarea {...p} rows={2} maxLength={1000} value={description} onChange={(e) => setDescription(e.target.value)} />}
+              <Field
+                label="Private note"
+                hint="Only you see this, e.g. where the code is printed."
+              >
+                {(p) => (
+                  <Textarea
+                    {...p}
+                    rows={2}
+                    maxLength={1000}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                  />
+                )}
               </Field>
               {rec && (
                 <p className="text-xs text-muted">
-                  Permanent code: <code className="rounded bg-surface px-1.5 py-0.5">{rec.public_code}</code>. The printed QR always points here, so you can change
+                  Permanent code:{" "}
+                  <code className="rounded bg-surface px-1.5 py-0.5">
+                    {rec.public_code}
+                  </code>
+                  . The printed QR always points here, so you can change
                   everything else at any time.
                 </p>
               )}
@@ -698,30 +1044,44 @@ export default function QrStudio() {
 
           {rec && !isStatic && (
             <Section icon={<BarChart3 />} title="Scans" defaultOpen={false}>
-              <QrScansPanel qrCodeId={rec.id} totalScans={scanCount} isStatic={false} />
+              <QrScansPanel
+                qrCodeId={rec.id}
+                totalScans={scanCount}
+                isStatic={false}
+              />
             </Section>
           )}
         </div>
 
         <aside className="order-first grid content-start gap-3 lg:sticky lg:top-24 lg:order-none lg:self-start">
-          <div role="tablist" aria-label="Preview" className="grid grid-cols-2 rounded-xl bg-white p-1 ring-1 ring-line">
-            {(['qr', 'phone'] as const).map((v) => (
+          <div
+            role="tablist"
+            aria-label="Preview"
+            className="grid grid-cols-2 rounded-xl bg-white p-1 ring-1 ring-line"
+          >
+            {(["qr", "phone"] as const).map((v) => (
               <button
                 key={v}
                 type="button"
                 role="tab"
                 aria-selected={view === v}
                 onClick={() => setView(v)}
-                className={cn('rounded-lg py-1.5 text-sm font-semibold transition-colors', view === v ? 'bg-signal text-white' : 'text-muted hover:text-ink')}
+                className={cn(
+                  "rounded-lg py-1.5 text-sm font-semibold transition-colors",
+                  view === v
+                    ? "bg-signal text-white"
+                    : "text-muted hover:text-ink",
+                )}
               >
-                {v === 'qr' ? 'QR code' : 'Phone preview'}
+                {v === "qr" ? "QR code" : "Phone preview"}
               </button>
             ))}
           </div>
-          {view === 'qr' ? (
+          {view === "qr" ? (
             wifiIncomplete ? (
               <div className="rounded-2xl border border-line bg-white p-6 text-center text-sm text-muted">
-                Enter the network name and password. Wi-Fi codes contain the details themselves, so the code appears once they are filled in.
+                Enter the network name and password. Wi-Fi codes contain the
+                details themselves, so the code appears once they are filled in.
               </div>
             ) : (
               <StudioQrCard
@@ -731,11 +1091,28 @@ export default function QrStudio() {
                 publicUrl={isStatic ? undefined : publicUrl}
                 isStatic={isStatic}
                 state={liveState}
-                logoUrl={logoFile ? storagePublicUrl(logoFile.storage_path, logoFile.version) : undefined}
+                logoUrl={
+                  logoFile
+                    ? storagePublicUrl(logoFile.storage_path, logoFile.version)
+                    : undefined
+                }
+                nameUnder={nameUnder}
               />
             )
           ) : (
-            <PhonePreview type={type} destination={parsed?.ok ? parsed.value : normalized} valid={Boolean(parsed?.ok)} blocks={blocks} files={files} fileId={fileId} />
+            <PhonePreview
+              type={type}
+              destination={parsed?.ok ? parsed.value : normalized}
+              valid={Boolean(parsed?.ok)}
+              blocks={blocks}
+              files={files}
+              fileId={fileId}
+              businessSlug={
+                !isWorkspace
+                  ? businesses.data?.find((b) => b.id === businessId)?.slug
+                  : undefined
+              }
+            />
           )}
           {saveError && (
             <Button variant="secondary" size="sm" onClick={() => void flush()}>
@@ -743,6 +1120,35 @@ export default function QrStudio() {
             </Button>
           )}
         </aside>
+      </div>
+
+      {/* Phones: status and the save button always within thumb reach. */}
+      <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-t border-line bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(15,23,42,0.06)] backdrop-blur sm:hidden">
+        <p
+          className={cn(
+            "min-w-0 flex-1 truncate text-sm font-medium",
+            liveState.kind === "live"
+              ? "text-success"
+              : liveState.kind === "error"
+                ? "text-danger"
+                : "text-muted",
+          )}
+        >
+          {liveState.kind === "live"
+            ? "✓ Saved and live"
+            : liveState.kind === "saving"
+              ? "Saving…"
+              : "message" in liveState
+                ? liveState.message
+                : ""}
+        </p>
+        <Button
+          onClick={() => void saveAndFinish()}
+          loading={finishing}
+          disabled={Boolean(missing) && !rec}
+        >
+          {!finishing && <Check />} Save &amp; finish
+        </Button>
       </div>
 
       <ConfirmDialog
@@ -753,28 +1159,33 @@ export default function QrStudio() {
         title="Delete this QR code?"
         description={
           <>
-            <p>Printed copies will stop working and show “not recognised”. This cannot be undone.</p>
-            <p className="mt-2">To stop it only for a while, use Pause instead.</p>
+            <p>
+              Printed copies will stop working and show “not recognised”. This
+              cannot be undone.
+            </p>
+            <p className="mt-2">
+              To stop it only for a while, use Pause instead.
+            </p>
           </>
         }
         confirmLabel="Delete"
         onConfirm={async () => {
-          if (!rec) return
-          setBusy(true)
+          if (!rec) return;
+          setBusy(true);
           try {
-            pendingRef.current = false
-            await deleteQr(rec.id)
-            recRef.current = null
-            toast.success('QR code deleted')
-            navigate('/admin', { replace: true })
+            pendingRef.current = false;
+            await deleteQr(rec.id);
+            recRef.current = null;
+            toast.success("QR code deleted");
+            navigate("/admin", { replace: true });
           } catch (e) {
-            toast.error(friendlyError(e))
+            toast.error(friendlyError(e));
           } finally {
-            setBusy(false)
-            setConfirmDelete(false)
+            setBusy(false);
+            setConfirmDelete(false);
           }
         }}
       />
     </div>
-  )
+  );
 }

@@ -1,5 +1,5 @@
 import { Archive, ArchiveRestore, Copy, CopyPlus, Download, ExternalLink, MoreHorizontal, Pause, Play, Plus, Printer, QrCode, Share2, Trash2 } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { UsageWarning } from '@/components/admin/UsagePanel'
@@ -9,11 +9,11 @@ import { Pagination, SearchInput } from '@/components/ui/data'
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/feedback'
 import { Select } from '@/components/ui/form'
 import { ConfirmDialog, Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '@/components/ui/overlay'
-import { qrPublicUrl } from '@/config'
-import { deleteQr, duplicateQr, listQrCodes, updateQr, type LifecycleFilter } from '@/lib/admin-api'
+import { qrPublicUrl, storagePublicUrl } from '@/config'
+import { deleteQr, duplicateQr, getFile, listQrCodes, updateQr, type LifecycleFilter } from '@/lib/admin-api'
 import { parseDesign } from '@/lib/qr/design'
 import { encodedContent } from '@/lib/qr/destinations'
-import { downloadPng, printQr, safeFilename, shareQr } from '@/lib/qr/export'
+import { downloadPng, imageUrlToDataUrl, printQr, safeFilename, shareQr } from '@/lib/qr/export'
 import { friendlyError } from '@/lib/supabase'
 import type { QrOverview } from '@/lib/types'
 import { useQuery } from '@/lib/use-query'
@@ -22,6 +22,29 @@ import { TYPE_LABEL, TYPE_TILES, typeIcon } from './studio/typeTiles'
 
 const PAGE_SIZE = 24
 
+const logoCache = new Map<string, Promise<string | undefined>>()
+/** The centre logo of a code as a data URL, so thumbnails and downloads match the studio. */
+function useLogoDataUrl(fileId: string | undefined, enabled: boolean): string | undefined {
+  const [url, setUrl] = useState<string>()
+  useEffect(() => {
+    if (!enabled || !fileId) {
+      setUrl(undefined)
+      return
+    }
+    let active = true
+    let p = logoCache.get(fileId)
+    if (!p) {
+      p = getFile(fileId).then((f) => (f ? imageUrlToDataUrl(storagePublicUrl(f.storage_path, f.version)) : undefined)).catch(() => undefined)
+      logoCache.set(fileId, p)
+    }
+    p.then((u) => active && setUrl(u))
+    return () => {
+      active = false
+    }
+  }, [fileId, enabled])
+  return url
+}
+
 function QrCard({ q, onChanged, onDelete }: { q: QrOverview; onChanged: () => void; onDelete: (q: QrOverview) => void }) {
   const navigate = useNavigate()
   const url = qrPublicUrl(q.public_code)
@@ -29,6 +52,8 @@ function QrCard({ q, onChanged, onDelete }: { q: QrOverview; onChanged: () => vo
   const content = encodedContent(q.type, q.destination, url)
   const isStatic = q.type === 'wifi'
   const paused = q.status !== 'active' || q.archived_at
+  const logoDataUrl = useLogoDataUrl(design.logoFileId, design.logo)
+  const opts = { logoDataUrl, businessName: q.type === 'business_profile' && q.business_name ? q.business_name : q.name }
 
   async function act(fn: () => Promise<unknown>, message: string) {
     try {
@@ -41,18 +66,18 @@ function QrCard({ q, onChanged, onDelete }: { q: QrOverview; onChanged: () => vo
   }
 
   return (
-    <li className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition-shadow hover:shadow-raise">
-      <Link to={`/admin/qr/${q.id}`} className="relative block bg-surface p-5" aria-label={`Edit ${q.name}`}>
-        <div className={cn('mx-auto w-36', paused && 'opacity-40')}>
-          <QrSvg text={content} design={design} label="" />
+    <li className="group grid grid-cols-[6.5rem_minmax(0,1fr)] overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition-shadow hover:shadow-raise sm:flex sm:flex-col">
+      <Link to={`/admin/qr/${q.id}`} className="relative block bg-surface p-3 sm:p-5" aria-label={`Edit ${q.name}`}>
+        <div className={cn('mx-auto w-full sm:w-36', paused && 'opacity-40')}>
+          <QrSvg text={content} design={design} logoDataUrl={logoDataUrl} businessName={opts.businessName} label="" />
         </div>
         {paused && (
-          <span className="absolute left-3 top-3 rounded-full bg-warning-soft px-2 py-0.5 text-xs font-semibold text-warning">
+          <span className="absolute left-1.5 top-1.5 rounded-full sm:left-3 sm:top-3 bg-warning-soft px-2 py-0.5 text-xs font-semibold text-warning">
             {q.archived_at ? 'Archived' : 'Paused'}
           </span>
         )}
       </Link>
-      <div className="flex flex-1 flex-col gap-3 p-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-3 sm:gap-3 sm:p-4">
         <div className="flex items-start gap-2">
           <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-signal-soft text-signal [&_svg]:size-3.5">{typeIcon(q.type)}</span>
           <div className="min-w-0 flex-1">
@@ -135,7 +160,7 @@ function QrCard({ q, onChanged, onDelete }: { q: QrOverview; onChanged: () => vo
             className="px-0"
             aria-label="Download PNG"
             title="Download PNG"
-            onClick={() => downloadPng(content, design, {}, safeFilename(q.name), 2048).catch((e) => toast.error((e as Error).message))}
+            onClick={() => downloadPng(content, design, opts, safeFilename(q.name), 2048).catch((e) => toast.error((e as Error).message))}
           >
             <Download />
           </Button>
@@ -146,7 +171,7 @@ function QrCard({ q, onChanged, onDelete }: { q: QrOverview; onChanged: () => vo
             aria-label="Share"
             title="Share"
             onClick={async () => {
-              const r = await shareQr(content, design, {}, q.name, isStatic ? undefined : url)
+              const r = await shareQr(content, design, opts, q.name, isStatic ? undefined : url)
               if (r === 'copied') toast.success('Link copied')
             }}
           >
@@ -160,7 +185,7 @@ function QrCard({ q, onChanged, onDelete }: { q: QrOverview; onChanged: () => vo
             title="Print"
             onClick={() => {
               try {
-                printQr(content, design, {}, q.name)
+                printQr(content, design, opts, q.name)
               } catch (e) {
                 toast.error((e as Error).message)
               }

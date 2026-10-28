@@ -6,6 +6,7 @@
  * SVG/HTML and anything executable are rejected.
  */
 import { config } from '@/config'
+import { processImage } from './image'
 import { getSupabase } from './supabase'
 import type { FileBucket, FileRecord } from './types'
 
@@ -70,75 +71,40 @@ export async function prepareUpload(file: File, opts: { imagesOnly?: boolean } =
   return v
 }
 
-/** Longest side of uploaded photos after optimisation, in pixels. */
-const MAX_IMAGE_SIDE = 1920
+/** Longest side of uploaded photos after optimisation, in pixels (sharp on any phone). */
+export const MAX_IMAGE_SIDE = 1600
+/** Images smaller than this that already fit are uploaded as they are. */
+const SMALL_IMAGE_BYTES = 250 * 1024
 /** PDFs above this size get a warning: slow on mobile data and costly in bandwidth. */
 export const LARGE_PDF_BYTES = 3 * 1024 * 1024
 
-async function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob | null> {
-  return new Promise((resolve) => canvas.toBlob(resolve, type, quality))
-}
-
 /**
- * Shrinks large photos before upload (longest side 1920 px, re-encoded).
- * Saves storage and bandwidth on the free plans and makes pages load faster on
- * phones. PNGs stay PNG (keeps transparency for logos); JPEG/WebP become JPEG.
- * Animated GIFs and already-small images are left untouched. Never returns a
- * larger file than the original.
+ * Shrinks and re-encodes photos before upload (longest side 1600 px, WebP where
+ * the browser supports it, which keeps transparency for logos). A 10 MB phone
+ * photo typically becomes 150–400 KB. Animated GIFs and small images that already
+ * fit are left untouched. Never returns a larger file than the original.
  */
-export async function optimizeImage(v: ValidatedFile): Promise<ValidatedFile> {
+export async function optimizeImage(v: ValidatedFile, maxSide = MAX_IMAGE_SIDE): Promise<ValidatedFile> {
   if (!v.mime.startsWith('image/') || v.mime === 'image/gif') return v
   if (typeof document === 'undefined' || typeof createImageBitmap !== 'function') return v
-  let bitmap: ImageBitmap
+  let longest: number
   try {
-    bitmap = await createImageBitmap(v.file)
+    const bitmap = await createImageBitmap(v.file)
+    longest = Math.max(bitmap.width, bitmap.height)
+    bitmap.close()
   } catch {
     return v
   }
-  const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(bitmap.width, bitmap.height))
-  if (scale === 1 && v.file.size < 300 * 1024) {
-    bitmap.close()
+  if (longest <= maxSide && v.file.size < SMALL_IMAGE_BYTES) return v
+  let out: File
+  try {
+    out = await processImage(v.file, { maxSide })
+  } catch {
     return v
   }
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.round(bitmap.width * scale)
-  canvas.height = Math.round(bitmap.height * scale)
-  const ctx = canvas.getContext('2d')
-  if (!ctx) {
-    bitmap.close()
-    return v
-  }
-  const keepPng = v.mime === 'image/png'
-  if (!keepPng) {
-    ctx.fillStyle = '#FFFFFF' // JPEG has no transparency
-    ctx.fillRect(0, 0, canvas.width, canvas.height)
-  }
-  ctx.imageSmoothingQuality = 'high'
-  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-  bitmap.close()
-  let asPng = keepPng
-  let blob = await canvasToBlob(canvas, keepPng ? 'image/png' : 'image/jpeg', keepPng ? undefined : 0.82)
-  // Large PNG photos/screenshots without transparency are much smaller as JPEG.
-  if (keepPng && blob && blob.size > 1024 * 1024 && isOpaque(ctx, canvas.width, canvas.height)) {
-    const jpeg = await canvasToBlob(canvas, 'image/jpeg', 0.82)
-    if (jpeg && jpeg.size < blob.size) {
-      blob = jpeg
-      asPng = false
-    }
-  }
-  if (!blob || blob.size >= v.file.size) return v
-  const mime = asPng ? 'image/png' : 'image/jpeg'
-  const ext = asPng ? 'png' : 'jpg'
-  const name = v.file.name.replace(/\.[^.]+$/, '') + '.' + ext
-  return { file: new File([blob], name, { type: mime }), mime, ext }
-}
-
-function isOpaque(ctx: CanvasRenderingContext2D, width: number, height: number): boolean {
-  const data = ctx.getImageData(0, 0, width, height).data
-  for (let i = 3; i < data.length; i += 4) {
-    if (data[i] < 255) return false
-  }
-  return true
+  if (out.size >= v.file.size && longest <= maxSide) return v
+  const ext = out.name.split('.').pop()!
+  return { file: out, mime: out.type, ext }
 }
 
 function storagePath(businessId: string | null, ext: string): string {

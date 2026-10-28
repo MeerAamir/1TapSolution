@@ -1,4 +1,5 @@
 import { AlertTriangle, ShieldAlert } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { ColorInput, Field, Input, Select, Switch } from '@/components/ui/form'
 import { DEFAULT_DESIGN, designWarnings, effectiveEcl, type QrDesign } from '@/lib/qr/design'
 import { cn } from '@/lib/utils'
@@ -60,10 +61,13 @@ export function DesignPanel({
   design,
   onChange,
   hasLogo,
+  logoControl,
 }: {
   design: QrDesign
   onChange: (d: QrDesign) => void
   hasLogo: boolean
+  /** Upload / change the logo, shown under the switch. */
+  logoControl?: ReactNode
 }) {
   const set = <K extends keyof QrDesign>(k: K, v: QrDesign[K]) => onChange({ ...design, [k]: v })
   return (
@@ -118,9 +122,10 @@ export function DesignPanel({
           checked={design.logo}
           disabled={!hasLogo}
           onCheckedChange={(v) => set('logo', v)}
-          label="Business logo in the centre"
-          description={hasLogo ? 'Error correction is raised automatically to keep the code readable.' : 'Add a logo to the business first.'}
+          label="Logo in the centre"
+          description={hasLogo ? 'Error correction is raised automatically to keep the code readable.' : 'Upload a logo to turn this on.'}
         />
+        {logoControl}
         {design.logo && (
           <Field label={`Logo size: ${Math.round(design.logoScale * 100)}% of the code`}>
             {(p) => (
@@ -143,7 +148,7 @@ export function DesignPanel({
             {(p) => <Input {...p} maxLength={32} placeholder="Scan for menu" value={design.cta ?? ''} onChange={(e) => set('cta', e.target.value || undefined)} />}
           </Field>
         )}
-        <Switch checked={design.showName} onCheckedChange={(v) => set('showName', v)} label="Business name under the code" />
+        <Switch checked={design.showName} onCheckedChange={(v) => set('showName', v)} label="Name under the code" description="Prints the QR code's name below it." />
         <Switch checked={design.border} onCheckedChange={(v) => set('border', v)} label="Thin border" />
       </div>
 

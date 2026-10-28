@@ -44,8 +44,8 @@ export function SectionHeading({ id, title, intro }: { id?: string; title: strin
 
 const STEPS = [
   {
-    title: 'Create your business profile',
-    body: 'Add your logo, contact numbers, location, opening hours, menus, brochures and social links once.',
+    title: 'Pick what the code opens',
+    body: 'A website, a page with all your links, a PDF menu, a contact card, WhatsApp, Wi-Fi and more. Type or paste, and it saves itself.',
     art: (
       <svg viewBox="0 0 120 80" className="h-full w-full" aria-hidden>
         <rect x="8" y="8" width="104" height="64" rx="8" fill="#fff" stroke="#E2E8F0" />
@@ -60,8 +60,8 @@ const STEPS = [
     ),
   },
   {
-    title: 'Generate and share your QR code',
-    body: 'Download print-ready PNG, SVG or PDF files for tables, posters, packaging and visiting cards.',
+    title: 'Download, share or print',
+    body: 'The code works the moment it appears. Save PNG, SVG or a print-ready PDF for tables, posters, packaging and visiting cards.',
     art: (
       <svg viewBox="0 0 120 80" className="h-full w-full" aria-hidden>
         <rect x="38" y="8" width="44" height="64" rx="6" fill="#fff" stroke="#E2E8F0" />
@@ -120,6 +120,7 @@ const FEATURE_GROUPS = [
   {
     title: 'What a scan can open',
     items: [
+      { icon: Layers, name: 'Multi-link pages', body: 'One code, one page: links, PDFs, contacts, WhatsApp, Wi-Fi and photos.' },
       { icon: Building2, name: 'Business profiles', body: 'A fast mobile page with your details, hours and actions.' },
       { icon: FileText, name: 'PDF and document sharing', body: 'Menus, brochures, catalogues and price lists.' },
       { icon: Contact, name: 'Digital business cards', body: 'One tap saves your details to the visitor’s contacts.' },
@@ -133,7 +134,7 @@ const FEATURE_GROUPS = [
     items: [
       { icon: Layers, name: 'Multiple QR codes', body: 'One per table, product, poster or campaign.' },
       { icon: PencilLine, name: 'Easy content updates', body: 'Edit in the dashboard; changes are live on the next scan.' },
-      { icon: Palette, name: 'Custom branding', body: 'Your colours, logo and call to action on every code.' },
+      { icon: Palette, name: 'Custom branding', body: 'Your colours, logo and call to action on every code. Photos are cropped and compressed for you.' },
       { icon: Printer, name: 'Print-ready downloads', body: 'Vector SVG and PDF, high-resolution PNG.' },
       { icon: BarChart3, name: 'QR analytics', body: 'Scans over time, by code and by device type.' },
     ],
@@ -333,8 +334,12 @@ const FAQS = [
     a: 'Yes. Edit the profile, swap a document or change the destination in the dashboard, and the next scan shows the new version. The code itself never changes. The exception is Wi-Fi codes: phones read network details directly from the pattern, so changing a Wi-Fi password needs a new code.',
   },
   {
+    q: 'Can one QR code hold several links?',
+    a: 'Yes. A multi-link page puts as many items as you like behind one code: website links, PDFs, text, phone and WhatsApp buttons, email, a contact card visitors can save, social profiles, photos, a map and Wi-Fi details.',
+  },
+  {
     q: 'Can I upload PDFs such as menus and brochures?',
-    a: `Yes. PDFs and common image formats are supported, up to ${config.maxUploadMb} MB per file. You can replace a document later and every code that points to it serves the new version automatically.`,
+    a: `Yes. PDFs and common image formats are supported, up to ${config.maxUploadMb} MB per file. Photos are resized and compressed automatically, and you can crop and zoom logos and banners before they are saved. You can replace a document later and every code that points to it serves the new version automatically.`,
   },
   {
     q: 'Which download formats are available?',

@@ -9,6 +9,8 @@ export const qrDesignSchema = z.object({
   eyes: z.enum(['square', 'rounded', 'circle']).default('square'),
   ecl: z.enum(['L', 'M', 'Q', 'H']).default('M'),
   logo: z.boolean().default(false),
+  /** The image used as the centre logo (a public file). */
+  logoFileId: z.string().uuid().optional(),
   logoScale: z.number().min(0.12).max(0.26).default(0.2),
   frame: z.boolean().default(false),
   cta: z.string().max(32).optional(),

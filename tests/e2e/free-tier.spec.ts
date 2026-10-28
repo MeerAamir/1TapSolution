@@ -19,10 +19,25 @@ async function keepAlive(request: import('@playwright/test').APIRequestContext) 
   expect(r.ok()).toBe(true)
 }
 
-test('logos with transparency stay PNG', async ({ page }) => {
+/** Decodes a stored image in the browser and reports its size and the alpha of the top-left pixel. */
+async function inspectStored(page: import('@playwright/test').Page, path: string) {
+  const url = `${stack.GATEWAY}/storage/v1/object/public/public-files/${path}`
+  return page.evaluate(async (u) => {
+    const blob = await (await fetch(u)).blob()
+    const bmp = await createImageBitmap(blob)
+    const c = document.createElement('canvas')
+    c.width = bmp.width
+    c.height = bmp.height
+    const ctx = c.getContext('2d')!
+    ctx.drawImage(bmp, 0, 0)
+    return { width: bmp.width, height: bmp.height, cornerAlpha: ctx.getImageData(0, 0, 1, 1).data[3], type: blob.type }
+  }, url)
+}
+
+test('logos keep their transparent background and are shrunk', async ({ page }) => {
   await loginAsAdmin(page)
   await page.goto('/admin/files')
-  // A filled circle on a transparent background, larger than 1920 px.
+  // A filled circle on a transparent background, larger than the 1600 px limit.
   const png = new PNG({ width: 2400, height: 2400 })
   for (let y = 0; y < 2400; y++) {
     for (let x = 0; x < 2400; x++) {
@@ -38,11 +53,14 @@ test('logos with transparency stay PNG', async ({ page }) => {
   await page.getByRole('button', { name: 'Choose files' }).click()
   await (await chooser).setFiles({ name: 'logo-alpha.png', mimeType: 'image/png', buffer: PNG.sync.write(png) })
   await expect(page.getByText('1 file uploaded')).toBeVisible({ timeout: 30_000 })
-  const [file] = await db<{ storage_path: string }>(`select storage_path from files where original_filename = 'logo-alpha.png' order by created_at desc limit 1`)
-  expect(file.storage_path).toMatch(/\.png$/)
+  const [file] = await db<{ storage_path: string }>(`select storage_path from files where original_filename like 'logo-alpha.%' order by created_at desc limit 1`)
+  expect(file.storage_path).toMatch(/\.(webp|png)$/)
+  const info = await inspectStored(page, file.storage_path)
+  expect(info.width).toBe(1600)
+  expect(info.cornerAlpha).toBe(0)
 })
 
-test('large photos are resized before upload to save storage and bandwidth', async ({ page }) => {
+test('large photos are resized and compressed before upload to save storage and bandwidth', async ({ page }) => {
   await loginAsAdmin(page)
   await page.goto('/admin/files')
   const original = bigPng(2600, 1800)
@@ -53,19 +71,12 @@ test('large photos are resized before upload to save storage and bandwidth', asy
   await expect(page.getByText('1 file uploaded')).toBeVisible({ timeout: 30_000 })
 
   const [file] = await db<{ storage_path: string; size_bytes: string }>(
-    `select storage_path, size_bytes from files where original_filename = 'shop-front.png' order by created_at desc limit 1`,
+    `select storage_path, size_bytes from files where original_filename like 'shop-front.%' order by created_at desc limit 1`,
   )
-  expect(Number(file.size_bytes)).toBeLessThan(original.length / 2)
-  // An opaque PNG photo is stored as a resized JPEG.
-  expect(file.storage_path).toMatch(/\.jpg$/)
-  const stored = Buffer.from(await (await page.request.get(`${stack.GATEWAY}/storage/v1/object/public/public-files/${file.storage_path}`)).body())
-  expect(stored.subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]))
-  // Read the JPEG frame size (SOF marker) to confirm the resize.
-  let i = 2
-  while (i < stored.length && !(stored[i] === 0xff && stored[i + 1] >= 0xc0 && stored[i + 1] <= 0xc2)) i += 2 + stored.readUInt16BE(i + 2)
-  const height = stored.readUInt16BE(i + 5)
-  const width = stored.readUInt16BE(i + 7)
-  expect(Math.max(width, height)).toBe(1920)
+  expect(Number(file.size_bytes)).toBeLessThan(original.length / 4)
+  expect(file.storage_path).toMatch(/\.(webp|jpg)$/)
+  const info = await inspectStored(page, file.storage_path)
+  expect(Math.max(info.width, info.height)).toBe(1600)
 })
 
 test('settings show free-plan usage and the keep-alive status', async ({ page, request }) => {

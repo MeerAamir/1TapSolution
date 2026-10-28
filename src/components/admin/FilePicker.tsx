@@ -6,7 +6,8 @@ import { EmptyState, Skeleton } from '@/components/ui/feedback'
 import { Dialog } from '@/components/ui/overlay'
 import { config, storagePublicUrl } from '@/config'
 import { listFilesForPicker } from '@/lib/admin-api'
-import { ACCEPT_ATTR, ACCEPT_IMAGES, uploadFile } from '@/lib/files'
+import { ACCEPT_ATTR, ACCEPT_IMAGES, uploadFile, validateUpload } from '@/lib/files'
+import { ImageCropDialog, type CropSpec } from './ImageCropDialog'
 import { friendlyError } from '@/lib/supabase'
 import { warnIfLargePdf } from './uploadNotices'
 import type { FileRecord } from '@/lib/types'
@@ -20,6 +21,8 @@ export function UploadButton({
   label = 'Upload',
   variant = 'secondary',
   showOnProfile,
+  crop,
+  size,
 }: {
   businessId: string | null
   kind?: 'document' | 'image'
@@ -27,9 +30,33 @@ export function UploadButton({
   label?: string
   variant?: 'secondary' | 'primary'
   showOnProfile?: boolean
+  /** Images: let the admin crop and zoom before upload, then resize for this use. */
+  crop?: CropSpec
+  size?: 'sm' | 'md'
 }) {
   const input = useRef<HTMLInputElement>(null)
   const [progress, setProgress] = useState<number | null>(null)
+  const [toCrop, setToCrop] = useState<File | null>(null)
+
+  async function upload(file: File) {
+    setProgress(5)
+    try {
+      const rec = await uploadFile(file, {
+        businessId,
+        imagesOnly: kind === 'image',
+        showOnProfile,
+        onProgress: setProgress,
+      })
+      toast.success(`Uploaded ${rec.title} (${formatBytes(rec.size_bytes)})`)
+      warnIfLargePdf(rec)
+      onUploaded(rec)
+    } catch (err) {
+      toast.error(friendlyError(err))
+    } finally {
+      setProgress(null)
+    }
+  }
+
   return (
     <>
       <input
@@ -46,28 +73,34 @@ export function UploadButton({
             toast.error('Choose a PDF file.')
             return
           }
-          setProgress(5)
-          try {
-            const rec = await uploadFile(file, {
-              businessId,
-              imagesOnly: kind === 'image',
-              showOnProfile,
-              onProgress: setProgress,
-            })
-            toast.success(`Uploaded ${rec.title}`)
-            warnIfLargePdf(rec)
-            onUploaded(rec)
-          } catch (err) {
-            toast.error(friendlyError(err))
-          } finally {
-            setProgress(null)
+          const isImage = /\.(png|jpe?g|webp)$/i.test(file.name)
+          if (crop && isImage) {
+            try {
+              await validateUpload(file, { imagesOnly: true }) // reject fakes before showing them
+              setToCrop(file)
+            } catch (err) {
+              toast.error(friendlyError(err))
+            }
+            return
           }
+          await upload(file)
         }}
       />
-      <Button type="button" variant={variant} onClick={() => input.current?.click()} loading={progress !== null}>
+      <Button type="button" variant={variant} size={size} onClick={() => input.current?.click()} loading={progress !== null}>
         {progress === null && <Upload />}
         {progress !== null ? `Uploading ${progress}%` : label}
       </Button>
+      {crop && (
+        <ImageCropDialog
+          file={toCrop}
+          spec={crop}
+          onCancel={() => setToCrop(null)}
+          onDone={(processed) => {
+            setToCrop(null)
+            void upload(processed)
+          }}
+        />
+      )}
     </>
   )
 }
@@ -82,6 +115,7 @@ export function FilePickerDialog({
   selected,
   onSelect,
   title,
+  crop,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
@@ -91,6 +125,7 @@ export function FilePickerDialog({
   selected?: string[]
   onSelect: (files: FileRecord[]) => void
   title?: string
+  crop?: CropSpec
 }) {
   const files = useQuery(() => (open ? listFilesForPicker(businessId, kind) : Promise.resolve([])), [open, businessId, kind])
   const [picked, setPicked] = useState<string[]>(selected ?? [])
@@ -118,6 +153,7 @@ export function FilePickerDialog({
               setPicked((cur) => (multiple ? [...cur, rec.id] : [rec.id]))
             }}
             label="Upload new"
+            crop={crop}
           />
           <Button
             disabled={!picked.length}

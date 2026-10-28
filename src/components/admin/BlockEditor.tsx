@@ -53,7 +53,13 @@ export const BLOCK_TYPES: Array<{ type: BlockType; label: string; icon: ReactNod
 const emailOk = (v: unknown) => typeof v === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim())
 
 /** Fills in what can be guessed, e.g. a link's label from its address. */
-export function normalizeBlock(b: DraftBlock): DraftBlock {
+export function normalizeBlock(block: DraftBlock): DraftBlock {
+  // Accept "example.com" without typing https://.
+  let b = block
+  for (const k of ['url', 'website']) {
+    const v = typeof b.data[k] === 'string' ? (b.data[k] as string).trim() : ''
+    if (v && !/^[a-z][a-z0-9+.-]*:/i.test(v) && /^[\w-]+(\.[\w-]+)+([/?#].*)?$/.test(v)) b = { ...b, data: { ...b.data, [k]: `https://${v}` } }
+  }
   if ((b.type === 'link' || b.type === 'button') && !String(b.data.label ?? '').trim() && isSafeHttpUrl(String(b.data.url ?? '').trim())) {
     try {
       const host = new URL(String(b.data.url).trim()).hostname.replace(/^www\./, '')
@@ -193,6 +199,7 @@ function BlockFields({
                 kind={block.type === 'document' ? 'document' : 'image'}
                 variant="primary"
                 label={block.type === 'document' ? 'Upload PDF' : 'Upload image'}
+                crop={block.type === 'image' ? { maxSide: 1600, label: 'Adjust the picture' } : undefined}
                 onUploaded={(rec) => {
                   onFilesAdded([rec])
                   set('file_id', rec.id)

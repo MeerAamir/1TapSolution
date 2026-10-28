@@ -86,9 +86,11 @@ export async function listBusinesses(p: BusinessListParams): Promise<{ rows: Bus
   return { rows: (data ?? []) as BusinessOverview[], total: count ?? 0 }
 }
 
-export async function listBusinessOptions(): Promise<Array<Pick<Business, 'id' | 'name' | 'slug' | 'status' | 'archived_at'>>> {
+export async function listBusinessOptions(): Promise<
+  Array<Pick<Business, 'id' | 'name' | 'slug' | 'status' | 'archived_at' | 'logo_file_id' | 'is_demo'>>
+> {
   return unwrap(
-    await sb().from('businesses').select('id, name, slug, status, archived_at').eq('is_workspace', false).order('name'),
+    await sb().from('businesses').select('id, name, slug, status, archived_at, logo_file_id, is_demo').eq('is_workspace', false).order('name'),
   )
 }
 
@@ -502,4 +504,29 @@ export interface UsageInfo {
 
 export async function adminUsage(): Promise<UsageInfo> {
   return unwrap(await sb().rpc('admin_usage')) as UsageInfo
+}
+
+// ---------------------------------------------------------------------------
+// Sample content
+// ---------------------------------------------------------------------------
+export async function demoContentCounts(): Promise<{ businesses: number; qr: number }> {
+  const [b, q] = await Promise.all([
+    sb().from('businesses').select('id', { count: 'exact', head: true }).eq('is_demo', true),
+    sb().from('qr_codes').select('id', { count: 'exact', head: true }).eq('is_demo', true),
+  ])
+  if (b.error) throw b.error
+  if (q.error) throw q.error
+  return { businesses: b.count ?? 0, qr: q.count ?? 0 }
+}
+
+/** Deletes the sample businesses and codes that come with a new installation. Real content is never touched. */
+export async function removeDemoContent(): Promise<void> {
+  unwrap(await sb().from('qr_codes').delete().eq('is_demo', true))
+  unwrap(await sb().from('businesses').delete().eq('is_demo', true))
+}
+
+export async function getFile(id: string): Promise<FileRecord | null> {
+  const { data, error } = await sb().from('files').select('*').eq('id', id).maybeSingle()
+  if (error) throw error
+  return (data as FileRecord | null) ?? null
 }

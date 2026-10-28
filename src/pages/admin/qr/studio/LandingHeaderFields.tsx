@@ -2,6 +2,7 @@ import { Check, X } from 'lucide-react'
 import { UploadButton } from '@/components/admin/FilePicker'
 import { ColorInput, Field, Input, Switch, Textarea } from '@/components/ui/form'
 import { storagePublicUrl } from '@/config'
+import { IMAGE_PRESETS } from '@/lib/image'
 import type { FileRecord } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -20,6 +21,7 @@ function ImageSlot({
   onChange: (f: FileRecord | null) => void
   round?: boolean
 }) {
+  const crop = round ? { ...IMAGE_PRESETS.avatar, label: 'Adjust the profile image' } : { ...IMAGE_PRESETS.cover, label: 'Adjust the cover image' }
   return (
     <div className="grid gap-1.5">
       <p className="text-sm font-medium">{label}</p>
@@ -45,7 +47,7 @@ function ImageSlot({
             None
           </span>
         )}
-        <UploadButton businessId={businessId} kind="image" label={file ? 'Change' : 'Upload'} onUploaded={onChange} />
+        <UploadButton businessId={businessId} kind="image" label={file ? 'Change' : 'Upload'} crop={crop} onUploaded={onChange} />
       </div>
     </div>
   )
