@@ -144,7 +144,7 @@ export function ThemeShell({
   } as CSSProperties
   return (
     <PageThemeContext.Provider value={resolved}>
-      <div className={cn('themed min-h-full', className)} style={{ ...bg.style, ...vars }}>
+      <div className={cn('themed min-h-dvh', className)} style={{ ...bg.style, ...vars }}>
         {children}
       </div>
     </PageThemeContext.Provider>

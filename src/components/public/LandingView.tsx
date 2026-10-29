@@ -102,7 +102,7 @@ export function LandingView({
             </div>
           )}
         </div>
-        <div className="-mt-12 flex flex-col items-center px-2 text-center">
+        <div className="relative z-10 -mt-12 flex flex-col items-center px-2 text-center">
           {header.avatar ? (
             <img
               src={storagePublicUrl(header.avatar.path, header.avatar.version)}
@@ -124,7 +124,7 @@ export function LandingView({
           {blocks.length ? (
             <BlockList blocks={blocks} accent={strong} />
           ) : (
-            <p className="rounded-2xl border border-dashed border-line-strong px-4 py-8 text-center text-sm text-muted">Nothing here yet.</p>
+            <p className="t-text rounded-2xl border border-dashed border-current/30 px-4 py-8 text-center text-sm">Nothing here yet.</p>
           )}
         </div>
       </main>
