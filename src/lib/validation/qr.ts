@@ -93,6 +93,7 @@ const menuItem = z.object({
   price: opt(30),
   description: opt(300),
   tag: z.preprocess(blankToUndef, z.enum(['veg', 'non_veg', 'vegan', 'spicy', 'new', 'popular']).optional()),
+  badge: opt(24),
 })
 
 /** Mirrors public.is_valid_menu(). */

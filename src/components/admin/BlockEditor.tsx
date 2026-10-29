@@ -26,7 +26,7 @@ import { Button } from '@/components/ui/button'
 import { Field, Input, Select, Textarea } from '@/components/ui/form'
 import { storagePublicUrl } from '@/config'
 import { isSafeHttpUrl } from '@/lib/qr/destinations'
-import { SOCIAL_LABELS, SOCIAL_PLATFORMS } from '@/lib/qr/types'
+import { socialPickerLabel, SOCIAL_PLATFORMS } from '@/lib/qr/types'
 import type { BlockType, FileRecord } from '@/lib/types'
 import { FilePickerDialog, UploadButton } from './FilePicker'
 import type { ZodType } from 'zod'
@@ -235,8 +235,26 @@ function BlockFields({
                 }}
               />
             )}
+            {isGallery && (
+              <UploadButton
+                businessId={businessId}
+                kind="image"
+                variant={chosen.length ? 'secondary' : 'primary'}
+                size="sm"
+                multiple
+                label={chosen.length ? 'Add more photos' : 'Upload photos'}
+                onUploaded={(rec) => {
+                  onFilesAdded([rec])
+                  set('file_ids', [...ids, rec.id].slice(0, 24))
+                }}
+                onUploadedMany={(list) => {
+                  onFilesAdded(list)
+                  set('file_ids', [...ids, ...list.map((f) => f.id)].slice(0, 24))
+                }}
+              />
+            )}
             <Button type="button" variant="secondary" size="sm" onClick={() => setPicker(true)}>
-              {chosen.length ? 'Change' : isGallery ? 'Choose or upload images' : 'Choose from my files'}
+              {chosen.length ? (isGallery ? 'Choose / reorder' : 'Change') : 'Choose from my files'}
             </Button>
           </div>
           {(errors.file_id || errors.file_ids) && <p className="text-xs font-medium text-danger">{errors.file_id || errors.file_ids}</p>}
@@ -396,7 +414,7 @@ function BlockFields({
               <Select {...p} value={str('platform') || 'instagram'} onChange={(e) => set('platform', e.target.value)}>
                 {SOCIAL_PLATFORMS.map((s) => (
                   <option key={s} value={s}>
-                    {SOCIAL_LABELS[s]}
+                    {socialPickerLabel(s)}
                   </option>
                 ))}
               </Select>

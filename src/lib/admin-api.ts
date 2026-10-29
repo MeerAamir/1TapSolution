@@ -337,6 +337,22 @@ export async function duplicateQr(source: QrCodeRecord): Promise<QrCodeRecord> {
   return copy
 }
 
+/** Puts a QR code (and its page items) under another business; null = no business. */
+export async function moveQr(qrId: string, businessId: string | null): Promise<void> {
+  unwrap(await sb().rpc('admin_move_qr', { p_qr: qrId, p_business: businessId }))
+}
+
+/** Creates a business from just its name; details can be added later. */
+export async function quickBusiness(name: string): Promise<string> {
+  return unwrap(await sb().rpc('admin_quick_business', { p_name: name })) as string
+}
+
+export async function getFilesByIds(ids: string[]): Promise<FileRecord[]> {
+  const unique = [...new Set(ids.filter((id) => /^[0-9a-f-]{36}$/i.test(id)))]
+  if (!unique.length) return []
+  return unwrap(await sb().from('files').select('*').in('id', unique)) as FileRecord[]
+}
+
 export async function listQrForBusiness(businessId: string): Promise<QrOverview[]> {
   return unwrap(await sb().from('admin_qr_overview').select('*').eq('business_id', businessId).order('created_at', { ascending: false })) as QrOverview[]
 }
@@ -476,6 +492,19 @@ export async function recentScans(filter: { qrCodeId?: string; businessId?: stri
     qr_codes: { name: string } | null
     businesses: { name: string } | null
   }>
+}
+
+/** Times of scans in a period (for the day/hour heatmap); capped for the free plan. */
+export async function scanTimes(from: Date, to: Date, filter: { businessId?: string } = {}, limit = 5000): Promise<string[]> {
+  let q = sb()
+    .from('qr_scan_events')
+    .select('occurred_at')
+    .eq('is_simulated', false)
+    .gte('occurred_at', from.toISOString())
+    .lt('occurred_at', to.toISOString())
+  if (filter.businessId) q = q.eq('business_id', filter.businessId)
+  const rows = unwrap(await q.order('occurred_at', { ascending: false }).limit(limit)) as Array<{ occurred_at: string }>
+  return rows.map((r) => r.occurred_at)
 }
 
 // ---------------------------------------------------------------------------

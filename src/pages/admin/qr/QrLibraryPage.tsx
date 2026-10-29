@@ -1,16 +1,17 @@
-import { Archive, ArchiveRestore, CalendarClock, CalendarPlus, Copy, CopyPlus, Download, ExternalLink, MoreHorizontal, Pause, Play, Plus, Printer, QrCode, Share2, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { Archive, ArchiveRestore, Building2, CalendarClock, CalendarPlus, Copy, FolderInput, LayoutGrid, Rows3, CopyPlus, Download, ExternalLink, MoreHorizontal, Pause, Play, Plus, Printer, QrCode, Share2, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
+import { BusinessSelect } from '@/components/admin/BusinessSelect'
 import { UsageWarning } from '@/components/admin/UsagePanel'
 import { QrSvg } from '@/components/qr/QrSvg'
 import { Button } from '@/components/ui/button'
 import { Pagination, SearchInput } from '@/components/ui/data'
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/feedback'
 import { Select } from '@/components/ui/form'
-import { ConfirmDialog, Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '@/components/ui/overlay'
+import { ConfirmDialog, Dialog, Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '@/components/ui/overlay'
 import { qrPublicUrl, storagePublicUrl } from '@/config'
-import { deleteQr, duplicateQr, getFile, listQrCodes, updateQr, type LifecycleFilter } from '@/lib/admin-api'
+import { deleteQr, duplicateQr, getFile, listBusinessOptions, listQrCodes, moveQr, updateQr, workspaceBusinessId, type LifecycleFilter } from '@/lib/admin-api'
 import { parseDesign } from '@/lib/qr/design'
 import { encodedContent, isStaticQr } from '@/lib/qr/destinations'
 import { expiryInfo, expiryLabel, extendExpiry } from '@/lib/qr/expiry'
@@ -46,7 +47,7 @@ function useLogoDataUrl(fileId: string | undefined, enabled: boolean): string | 
   return url
 }
 
-function QrCard({ q, onChanged, onDelete }: { q: QrOverview; onChanged: () => void; onDelete: (q: QrOverview) => void }) {
+function QrCard({ q, onChanged, onDelete, onMove }: { q: QrOverview; onChanged: () => void; onDelete: (q: QrOverview) => void; onMove: (q: QrOverview) => void }) {
   const navigate = useNavigate()
   const url = qrPublicUrl(q.public_code)
   const design = parseDesign(q.design)
@@ -162,6 +163,11 @@ function QrCard({ q, onChanged, onDelete }: { q: QrOverview; onChanged: () => vo
                   <MenuSeparator />
                 </>
               )}
+              {q.type !== 'business_profile' && (
+                <MenuItem onSelect={() => onMove(q)}>
+                  <FolderInput /> Move to business…
+                </MenuItem>
+              )}
               <MenuItem
                 onSelect={async () => {
                   try {
@@ -250,23 +256,124 @@ function QrCard({ q, onChanged, onDelete }: { q: QrOverview; onChanged: () => vo
   )
 }
 
+type View = 'grid' | 'business'
+
+function readView(): View {
+  try {
+    return localStorage.getItem('qr-library-view') === 'business' ? 'business' : 'grid'
+  } catch {
+    return 'grid'
+  }
+}
+
+function MoveDialog({ q, onClose, onMoved }: { q: QrOverview | null; onClose: () => void; onMoved: () => void }) {
+  const businesses = useQuery(listBusinessOptions, [])
+  const [target, setTarget] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    if (q) setTarget(q.business_is_workspace ? null : q.business_id)
+  }, [q])
+  return (
+    <Dialog
+      open={Boolean(q)}
+      onOpenChange={(v) => !v && onClose()}
+      title={`Move “${q?.name ?? ''}”`}
+      description="Group this code under a business. The printed code keeps working exactly as before."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            loading={busy}
+            disabled={!q || (q.business_is_workspace ? target === null : target === q.business_id)}
+            onClick={async () => {
+              if (!q) return
+              setBusy(true)
+              try {
+                await moveQr(q.id, target)
+                toast.success(target ? `Moved to ${businesses.data?.find((b) => b.id === target)?.name ?? 'the business'}` : 'Moved to No business')
+                onMoved()
+                onClose()
+              } catch (e) {
+                toast.error(friendlyError(e))
+              } finally {
+                setBusy(false)
+              }
+            }}
+          >
+            Move
+          </Button>
+        </>
+      }
+    >
+      <BusinessSelect value={target} onChange={setTarget} businesses={businesses.data ?? []} onCreated={() => businesses.reload()} />
+    </Dialog>
+  )
+}
+
 export default function QrLibraryPage() {
   const [search, setSearch] = useState('')
   const [type, setType] = useState('')
   const [lifecycle, setLifecycle] = useState<LifecycleFilter>('live')
+  const [business, setBusiness] = useState('') // '' all, 'none', or a business id
+  const [view, setViewState] = useState<View>(readView)
   const [page, setPage] = useState(0)
   const [toDelete, setToDelete] = useState<QrOverview | null>(null)
+  const [toMove, setToMove] = useState<QrOverview | null>(null)
   const [busy, setBusy] = useState(false)
+  const businesses = useQuery(listBusinessOptions, [])
 
-  const list = useQuery(
-    () => listQrCodes({ search, businessId: '', type, lifecycle, sort: 'updated_at', ascending: false, page, pageSize: PAGE_SIZE }),
-    [search, type, lifecycle, page],
-  )
+  const setView = (v: View) => {
+    setViewState(v)
+    setPage(0)
+    try {
+      localStorage.setItem('qr-library-view', v)
+    } catch {
+      // only a convenience
+    }
+  }
+
+  const list = useQuery(async () => {
+    const businessId = business === 'none' ? await workspaceBusinessId() : business
+    const grouped = view === 'business'
+    return listQrCodes({
+      search,
+      businessId,
+      type,
+      lifecycle,
+      sort: grouped ? 'name' : 'updated_at',
+      ascending: grouped,
+      page: grouped ? 0 : page,
+      pageSize: grouped ? 1000 : PAGE_SIZE,
+    })
+  }, [search, type, lifecycle, page, business, view])
   const onSearch = useCallback((v: string) => {
     setSearch(v)
     setPage(0)
   }, [])
-  const filtered = Boolean(search || type || lifecycle !== 'live')
+  const filtered = Boolean(search || type || business || lifecycle !== 'live')
+
+  const groups = useMemo(() => {
+    if (view !== 'business' || !list.data) return []
+    const map = new Map<string, { key: string; name: string; businessId: string | null; rows: QrOverview[] }>()
+    for (const q of list.data.rows) {
+      const key = q.business_is_workspace ? '' : q.business_id
+      const g = map.get(key) ?? { key, name: q.business_is_workspace ? 'No business' : (q.business_name ?? 'Business'), businessId: q.business_is_workspace ? null : q.business_id, rows: [] }
+      g.rows.push(q)
+      map.set(key, g)
+    }
+    // Businesses A–Z, codes without a business last.
+    return [...map.values()].sort((a, b) => (a.key === '' ? 1 : b.key === '' ? -1 : a.name.localeCompare(b.name)))
+  }, [list.data, view])
+
+  const grid = (rows: QrOverview[]) => (
+    <ul className={cn('grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4', list.loading && 'opacity-60')}>
+      {rows.map((q) => (
+        <QrCard key={q.id} q={q} onChanged={list.reload} onDelete={setToDelete} onMove={setToMove} />
+      ))}
+    </ul>
+  )
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -276,7 +383,7 @@ export default function QrLibraryPage() {
           <p className="mt-1 text-muted">Edit any code at any time. Printed codes keep working and show the new content.</p>
         </div>
         <Button asChild size="lg">
-          <Link to="/admin/qr/new">
+          <Link to={business && business !== 'none' ? `/admin/qr/new?business=${business}` : '/admin/qr/new'}>
             <Plus /> Create QR code
           </Link>
         </Button>
@@ -284,8 +391,17 @@ export default function QrLibraryPage() {
 
       <UsageWarning />
 
-      <div className="mb-5 flex flex-wrap gap-3">
-        <SearchInput value={search} onChange={onSearch} placeholder="Search by name or code" className="min-w-56 flex-1" />
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <SearchInput value={search} onChange={onSearch} placeholder="Search by name, business or code" className="min-w-56 flex-1" />
+        <Select aria-label="Business" value={business} onChange={(e) => { setBusiness(e.target.value); setPage(0) }} className="w-auto min-w-44">
+          <option value="">All businesses</option>
+          <option value="none">No business</option>
+          {businesses.data?.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </Select>
         <Select aria-label="Type" value={type} onChange={(e) => { setType(e.target.value); setPage(0) }} className="w-auto min-w-40">
           <option value="">All types</option>
           {TYPE_TILES.map((t) => (
@@ -303,6 +419,25 @@ export default function QrLibraryPage() {
           <option value="archived">Archived</option>
           <option value="all">Everything</option>
         </Select>
+        <div role="radiogroup" aria-label="Layout" className="flex rounded-xl bg-white p-1 ring-1 ring-line">
+          {(
+            [
+              ['grid', 'All codes', <LayoutGrid key="g" />],
+              ['business', 'By business', <Rows3 key="b" />],
+            ] as const
+          ).map(([v, label, icon]) => (
+            <button
+              key={v}
+              type="button"
+              role="radio"
+              aria-checked={view === v}
+              onClick={() => setView(v)}
+              className={cn('flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium [&_svg]:size-4', view === v ? 'bg-signal text-white' : 'text-muted hover:text-ink')}
+            >
+              {icon} {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {list.error ? (
@@ -332,13 +467,31 @@ export default function QrLibraryPage() {
             />
           </div>
         )
+      ) : view === 'business' ? (
+        <div className="grid gap-8">
+          {groups.map((g) => (
+            <section key={g.key} aria-label={g.name}>
+              <div className="mb-3 flex flex-wrap items-center gap-3 border-b border-line pb-2">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-signal-soft text-signal">
+                  <Building2 className="size-4" />
+                </span>
+                <h2 className="text-lg font-semibold">{g.name}</h2>
+                <span className="rounded-full bg-surface px-2 py-0.5 text-xs font-semibold text-muted ring-1 ring-line">
+                  {g.rows.length} {g.rows.length === 1 ? 'code' : 'codes'}
+                </span>
+                <Button asChild variant="ghost" size="sm" className="ml-auto">
+                  <Link to={g.businessId ? `/admin/qr/new?business=${g.businessId}` : '/admin/qr/new'}>
+                    <Plus /> Add a code
+                  </Link>
+                </Button>
+              </div>
+              {grid(g.rows)}
+            </section>
+          ))}
+        </div>
       ) : (
         <>
-          <ul className={cn('grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4', list.loading && 'opacity-60')}>
-            {list.data.rows.map((q) => (
-              <QrCard key={q.id} q={q} onChanged={list.reload} onDelete={setToDelete} />
-            ))}
-          </ul>
+          {grid(list.data.rows)}
           {list.data.total > PAGE_SIZE && (
             <div className="mt-4 rounded-xl bg-white ring-1 ring-line">
               <Pagination page={page} pageSize={PAGE_SIZE} total={list.data.total} onPageChange={setPage} />
@@ -346,6 +499,8 @@ export default function QrLibraryPage() {
           )}
         </>
       )}
+
+      <MoveDialog q={toMove} onClose={() => setToMove(null)} onMoved={list.reload} />
 
       <ConfirmDialog
         open={Boolean(toDelete)}

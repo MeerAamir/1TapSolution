@@ -34,7 +34,8 @@ If you ever move to a new domain, keep the old one connected to the same Cloudfl
 6. `supabase/migrations/20261026000006_free_tier_guards.sql`
 7. `supabase/migrations/20261027000007_simple_studio.sql`
 8. `supabase/migrations/20261029000008_menus_payments_themes.sql`
-9. *(optional demo data)* `supabase/seed.sql`
+9. `supabase/migrations/20261030000009_grouping_backup.sql`
+10. *(optional demo data)* `supabase/seed.sql`
 
 **Option B: Supabase CLI.**
 

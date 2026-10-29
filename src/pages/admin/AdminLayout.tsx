@@ -9,6 +9,7 @@ import {
   Menu,
   PlusCircle,
   QrCode,
+  HardDriveDownload,
   Settings,
   Tags,
   X,
@@ -26,6 +27,7 @@ const NAV = [
   { to: '/admin/qr/new', label: 'Create QR code', icon: PlusCircle, end: true },
   { to: '/admin/analytics', label: 'Scans & analytics', icon: BarChart3 },
   { to: '/admin/messages', label: 'Messages', icon: Mail },
+  { to: '/admin/backup', label: 'Backup', icon: HardDriveDownload },
   { to: '/admin/settings', label: 'Settings', icon: Settings },
 ]
 

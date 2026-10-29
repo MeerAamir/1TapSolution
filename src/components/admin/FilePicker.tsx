@@ -23,6 +23,8 @@ export function UploadButton({
   showOnProfile,
   crop,
   size,
+  multiple,
+  onUploadedMany,
 }: {
   businessId: string | null
   kind?: 'document' | 'image'
@@ -33,9 +35,35 @@ export function UploadButton({
   /** Images: let the admin crop and zoom before upload, then resize for this use. */
   crop?: CropSpec
   size?: 'sm' | 'md'
+  /** Pick several files at once (they are resized automatically, no cropping). */
+  multiple?: boolean
+  /** With `multiple`: receives every uploaded file at once, in the order picked. */
+  onUploadedMany?: (files: FileRecord[]) => void
 }) {
   const input = useRef<HTMLInputElement>(null)
   const [progress, setProgress] = useState<number | null>(null)
+  const [batch, setBatch] = useState<{ n: number; of: number } | null>(null)
+
+  async function uploadMany(list: File[]) {
+    let ok = 0
+    const done: FileRecord[] = []
+    for (const [i, file] of list.entries()) {
+      setBatch({ n: i + 1, of: list.length })
+      setProgress(5)
+      try {
+        const rec = await uploadFile(file, { businessId, imagesOnly: kind === 'image', showOnProfile, onProgress: setProgress })
+        if (onUploadedMany) done.push(rec)
+        else onUploaded(rec)
+        ok++
+      } catch (err) {
+        toast.error(`${file.name}: ${friendlyError(err)}`)
+      }
+    }
+    setBatch(null)
+    setProgress(null)
+    if (done.length) onUploadedMany?.(done)
+    if (ok) toast.success(ok === 1 ? 'Uploaded 1 file' : `Uploaded ${ok} files`)
+  }
   const [toCrop, setToCrop] = useState<File | null>(null)
 
   async function upload(file: File) {
@@ -64,10 +92,16 @@ export function UploadButton({
         type="file"
         className="sr-only"
         tabIndex={-1}
+        multiple={multiple}
         accept={kind === 'image' ? ACCEPT_IMAGES : kind === 'document' ? '.pdf,application/pdf' : ACCEPT_ATTR}
         onChange={async (e) => {
-          const file = e.target.files?.[0]
+          const picked = [...(e.target.files ?? [])]
           e.target.value = ''
+          if (multiple && picked.length > 1) {
+            await uploadMany(picked)
+            return
+          }
+          const file = picked[0]
           if (!file) return
           if (kind === 'document' && !file.name.toLowerCase().endsWith('.pdf')) {
             toast.error('Choose a PDF file.')
@@ -88,7 +122,7 @@ export function UploadButton({
       />
       <Button type="button" variant={variant} size={size} onClick={() => input.current?.click()} loading={progress !== null}>
         {progress === null && <Upload />}
-        {progress !== null ? `Uploading ${progress}%` : label}
+        {progress !== null ? (batch ? `Uploading ${batch.n} of ${batch.of}…` : `Uploading ${progress}%`) : label}
       </Button>
       {crop && (
         <ImageCropDialog

@@ -22,9 +22,10 @@ import {
   previewPayload,
   saveBlocks,
   saveBusiness,
+  saveCategory,
   updateFileMeta,
 } from '@/lib/admin-api'
-import { SOCIAL_LABELS, SOCIAL_PLATFORMS } from '@/lib/qr/types'
+import { socialPickerLabel, SOCIAL_PLATFORMS } from '@/lib/qr/types'
 import { friendlyError } from '@/lib/supabase'
 import type { FileRecord } from '@/lib/types'
 import { useQuery } from '@/lib/use-query'
@@ -402,14 +403,13 @@ export default function BusinessFormPage() {
                   </Field>
                   <Field label="Category" error={errors.category_id?.message}>
                     {(p) => (
-                      <Select {...p} {...register('category_id')}>
-                        <option value="">No category</option>
-                        {categories.data?.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </Select>
+                      <CategorySelect
+                        fieldProps={p}
+                        value={watched.category_id ?? ''}
+                        categories={categories.data ?? []}
+                        onChange={(v) => setValue('category_id', v, { shouldDirty: true })}
+                        onCreated={() => categories.reload()}
+                      />
                     )}
                   </Field>
                   <Field label="Tagline" hint="One short line under the name." error={errors.tagline?.message} className="sm:col-span-2">
@@ -477,7 +477,7 @@ export default function BusinessFormPage() {
                       <Select aria-label="Platform" {...register(`social_links.${i}.platform`)}>
                         {SOCIAL_PLATFORMS.map((s) => (
                           <option key={s} value={s}>
-                            {SOCIAL_LABELS[s]}
+                            {socialPickerLabel(s)}
                           </option>
                         ))}
                       </Select>
@@ -641,5 +641,81 @@ export default function BusinessFormPage() {
         onConfirm={() => blocker.proceed?.()}
       />
     </>
+  )
+}
+
+/** Category dropdown with "＋ New category…" to add one on the spot. */
+function CategorySelect({
+  fieldProps,
+  value,
+  categories,
+  onChange,
+  onCreated,
+}: {
+  fieldProps: { id: string }
+  value: string
+  categories: Array<{ id: string; name: string }>
+  onChange: (id: string) => void
+  onCreated: () => void
+}) {
+  const [adding, setAdding] = useState(false)
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+  async function create() {
+    const n = name.trim()
+    if (!n) return
+    setBusy(true)
+    try {
+      const c = await saveCategory({ name: n, slug: slugify(n) || `category-${Date.now().toString(36)}`, description: null })
+      onCreated()
+      onChange(c.id)
+      setAdding(false)
+      setName('')
+    } catch (e) {
+      toast.error(friendlyError(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  if (adding)
+    return (
+      <div className="flex gap-2">
+        <Input
+          id={fieldProps.id}
+          autoFocus
+          aria-label="New category name"
+          placeholder="e.g. Hotels"
+          maxLength={80}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              void create()
+            }
+          }}
+        />
+        <Button type="button" loading={busy} disabled={!name.trim()} onClick={() => void create()}>
+          Add
+        </Button>
+        <Button type="button" variant="ghost" onClick={() => setAdding(false)}>
+          Cancel
+        </Button>
+      </div>
+    )
+  return (
+    <Select
+      {...fieldProps}
+      value={value}
+      onChange={(e) => (e.target.value === '__new__' ? setAdding(true) : onChange(e.target.value))}
+    >
+      <option value="">No category</option>
+      {categories.map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.name}
+        </option>
+      ))}
+      <option value="__new__">＋ New category…</option>
+    </Select>
   )
 }

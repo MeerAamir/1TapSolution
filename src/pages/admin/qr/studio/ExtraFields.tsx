@@ -177,13 +177,36 @@ export function MenuFields({
                         onChange={(e) => updateItem(si, ii, { description: e.target.value })}
                       />
                       <div className="flex items-center justify-end">
-                        <Select aria-label="Tag" value={it.tag ?? ''} onChange={(e) => updateItem(si, ii, { tag: (e.target.value || undefined) as MenuItem['tag'] })} className="h-10 w-28">
-                          {TAG_OPTIONS.map(([v, l]) => (
-                            <option key={v} value={v}>
-                              {l}
-                            </option>
-                          ))}
-                        </Select>
+                        {it.badge !== undefined ? (
+                          <Input
+                            aria-label="Own label"
+                            autoFocus={!it.badge}
+                            placeholder="Own label, e.g. Chef’s special"
+                            maxLength={24}
+                            value={it.badge}
+                            onChange={(e) => updateItem(si, ii, { badge: e.target.value })}
+                            onBlur={() => !it.badge?.trim() && updateItem(si, ii, { badge: undefined })}
+                            className="h-10 w-44"
+                          />
+                        ) : (
+                          <Select
+                            aria-label="Tag"
+                            value={it.tag ?? ''}
+                            onChange={(e) =>
+                              e.target.value === '__other__'
+                                ? updateItem(si, ii, { badge: '', tag: undefined })
+                                : updateItem(si, ii, { tag: (e.target.value || undefined) as MenuItem['tag'] })
+                            }
+                            className="h-10 w-32"
+                          >
+                            {TAG_OPTIONS.map(([v, l]) => (
+                              <option key={v} value={v}>
+                                {l}
+                              </option>
+                            ))}
+                            <option value="__other__">Other…</option>
+                          </Select>
+                        )}
                         <Button variant="ghost" size="icon" aria-label="Move item up" disabled={ii === 0} onClick={() => moveItem(si, ii, -1)}>
                           <ArrowUp />
                         </Button>
@@ -258,7 +281,12 @@ export function MenuFields({
               businessId={businessId}
               kind="image"
               variant={photoIds.length ? 'secondary' : 'primary'}
-              label={photoIds.length ? 'Add another page' : 'Upload menu photo'}
+              label={photoIds.length ? 'Add more photos' : 'Upload menu photos'}
+              multiple
+              onUploadedMany={(list) => {
+                onFilesAdded(list)
+                set('file_ids', [...photoIds, ...list.map((f) => f.id)].slice(0, 30))
+              }}
               crop={{ maxSide: IMAGE_PRESETS.content.maxSide, label: 'Adjust the menu photo' }}
               onUploaded={(f) => {
                 onFilesAdded([f])

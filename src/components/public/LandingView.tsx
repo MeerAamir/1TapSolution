@@ -1,6 +1,7 @@
 import { Share2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { storagePublicUrl } from '@/config'
+import { cn } from '@/lib/utils'
 import type { PublicBlock, PublicFile } from '@/lib/types'
 import { copyText } from './actions'
 import { BlockList } from './Blocks'
@@ -65,8 +66,6 @@ export function LandingView({
 }) {
   const accent = header.theme?.accent || header.accent || DEFAULT_LANDING_ACCENT
   const strong = safeAccent(header.theme, accent)
-  // A styled background already frames the page; the plain colour band is only for the default look.
-  const styledBg = Boolean(header.theme?.bg_type && header.theme.bg_type !== 'soft')
   const title = header.title?.trim()
 
   useEffect(() => {
@@ -84,34 +83,22 @@ export function LandingView({
     <ThemeShell theme={header.theme} accent={accent}>
       {isDemo && <DemoRibbon />}
       <main className="mx-auto w-full max-w-md px-4 pb-4 pt-4">
-        <div className="relative">
-          {header.cover ? (
-            <img
-              src={storagePublicUrl(header.cover.path, header.cover.version)}
-              alt=""
-              className="h-40 w-full rounded-3xl object-cover"
-            />
-          ) : styledBg ? (
-            <div className="h-16 w-full" />
-          ) : (
-            <div className="h-28 w-full rounded-3xl" style={{ background: `linear-gradient(135deg, ${strong}, ${strong}B3)` }} />
-          )}
-          {!preview && (
-            <div className="absolute right-3 top-3">
-              <ShareButton title={title} />
-            </div>
-          )}
-        </div>
-        <div className="relative z-10 -mt-12 flex flex-col items-center px-2 text-center">
+        {/* Logo-only header: compact, so the buttons are visible without scrolling. */}
+        {!preview && (
+          <div className="flex justify-end">
+            <ShareButton title={title} />
+          </div>
+        )}
+        <div className={cn('flex flex-col items-center px-2 text-center', preview ? 'pt-6' : 'pt-1')}>
           {header.avatar ? (
             <img
               src={storagePublicUrl(header.avatar.path, header.avatar.version)}
               alt=""
-              className="h-24 w-24 rounded-full bg-white object-cover shadow-raise ring-4 ring-white"
+              className="h-24 w-24 rounded-full bg-white object-cover shadow-raise ring-4 ring-white/90"
             />
           ) : (
             <div
-              className="grid h-24 w-24 place-items-center rounded-full bg-white text-2xl font-bold shadow-raise ring-4 ring-white"
+              className="grid h-24 w-24 place-items-center rounded-full bg-white text-2xl font-bold shadow-raise ring-4 ring-white/90"
               style={{ color: strong }}
             >
               {initials}

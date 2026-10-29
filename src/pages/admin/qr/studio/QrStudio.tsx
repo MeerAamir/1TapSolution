@@ -3,6 +3,9 @@ import {
   ArrowLeftRight,
   BarChart3,
   Brush,
+  CircleAlert,
+  Loader2,
+  Building2,
   CalendarClock,
   Check,
   CopyPlus,
@@ -29,6 +32,7 @@ import {
   validateBlock,
   type DraftBlock,
 } from "@/components/admin/BlockEditor";
+import { BusinessSelect } from "@/components/admin/BusinessSelect";
 import { FilePickerDialog, UploadButton } from "@/components/admin/FilePicker";
 import { Button } from "@/components/ui/button";
 import { ErrorState, Notice, Spinner } from "@/components/ui/feedback";
@@ -46,7 +50,9 @@ import {
   createQr,
   deleteQr,
   duplicateQr,
+  getFilesByIds,
   getQr,
+  moveQr,
   listBlocks,
   listBusinessOptions,
   listFilesForPicker,
@@ -319,6 +325,12 @@ export default function QrStudio() {
         }
         if (!active) return;
         setBlocks(loadedBlocks);
+        // Pictures and PDFs the code uses, wherever they are stored (a code may have moved business).
+        const ids =
+          JSON.stringify([q.destination, q.design, q.file_id, loadedBlocks.map((b) => b.data)]).match(
+            /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+          ) ?? [];
+        getFilesByIds(ids).then(addFiles).catch(() => {});
         baseline.current = true; // the first computed snapshot is "already saved"
         setLoading(false);
       })
@@ -534,6 +546,36 @@ export default function QrStudio() {
     if (t === "business_profile" && isWorkspace) setBusinessId(null);
     if (t === "landing_page" && !blocks.length)
       setBlocks([{ key: newKey(), type: "link", data: {} }]);
+  }
+
+  const [moving, setMoving] = useState(false);
+  /** Assigns the code to a business (or none). Saved codes move with their page items. */
+  async function changeBusiness(target: string | null) {
+    setMoving(true);
+    try {
+      const owner = target ?? (await workspaceBusinessId());
+      if (recRef.current) {
+        while (inFlight.current) await new Promise((r) => setTimeout(r, 80));
+        await moveQr(recRef.current.id, target);
+        recRef.current = { ...recRef.current, business_id: owner };
+        setRec(recRef.current);
+      }
+      setBusinessId(owner);
+      setIsWorkspace(target === null);
+      if (type === "landing_page" && destination.show_business === undefined)
+        setDestination({ ...destination, show_business: false });
+      void loadFiles(owner);
+      if (recRef.current)
+        toast.success(
+          target
+            ? `Moved to ${businesses.data?.find((b) => b.id === target)?.name ?? "the business"}`
+            : "Moved to No business",
+        );
+    } catch (e) {
+      toast.error(friendlyError(e));
+    } finally {
+      setMoving(false);
+    }
   }
 
   async function lifecycle(
@@ -808,31 +850,24 @@ export default function QrStudio() {
             {!rec && (
               <Field label="Business" required>
                 {(p) => (
-                  <Select
-                    {...p}
-                    value={isWorkspace ? "" : (businessId ?? "")}
-                    onChange={(e) => {
-                      setBusinessId(e.target.value || null);
+                  <BusinessSelect
+                    id={p.id}
+                    allowNone={false}
+                    value={isWorkspace ? null : businessId}
+                    businesses={businesses.data ?? []}
+                    onCreated={() => businesses.reload()}
+                    onChange={(b) => {
+                      setBusinessId(b);
                       setIsWorkspace(false);
-                      if (e.target.value) void loadFiles(e.target.value);
+                      if (b) void loadFiles(b);
                     }}
-                  >
-                    <option value="">Choose a business</option>
-                    {businesses.data?.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                        {b.is_demo && !b.name.includes("(Demo)")
-                          ? " (Demo)"
-                          : ""}
-                      </option>
-                    ))}
-                  </Select>
+                  />
                 )}
               </Field>
             )}
             {!businesses.data?.length && (
               <Notice tone="info">
-                No businesses yet. Add one under{" "}
+                No businesses yet. Choose “＋ New business…” above, or add one with full details under{" "}
                 <Link
                   to="/admin/businesses/new"
                   className="font-semibold text-signal hover:underline"
@@ -890,7 +925,7 @@ export default function QrStudio() {
   })();
 
   return (
-    <div className="mx-auto max-w-6xl pb-24 sm:pb-0">
+    <div className="mx-auto max-w-6xl">
       {/* Header */}
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <Link
@@ -928,9 +963,25 @@ export default function QrStudio() {
             />
             <p className="px-1 text-sm text-muted">
               {TYPE_LABEL[type]}
-              {!isWorkspace && businessName ? ` · ${businessName}` : ""}
+              {type === "business_profile" && !isWorkspace && businessName
+                ? ` · ${businessName}`
+                : ""}
               {rec ? " · changes save automatically" : ""}
             </p>
+            {type !== "business_profile" && (
+              <label className="mt-2 flex max-w-md items-center gap-2 px-1 text-sm">
+                <Building2 className="size-4 shrink-0 text-muted" />
+                <span className="shrink-0 text-muted">Business:</span>
+                <BusinessSelect
+                  className="h-9 min-w-0 flex-1 py-1 text-sm"
+                  value={isWorkspace ? null : businessId}
+                  businesses={businesses.data ?? []}
+                  onCreated={() => businesses.reload()}
+                  onChange={(b) => void changeBusiness(b)}
+                  disabled={moving}
+                />
+              </label>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -1241,33 +1292,62 @@ export default function QrStudio() {
         </aside>
       </div>
 
-      {/* Phones: status and the save button always within thumb reach. */}
-      <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-t border-line bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(15,23,42,0.06)] backdrop-blur sm:hidden">
-        <p
-          className={cn(
-            "min-w-0 flex-1 truncate text-sm font-medium",
-            liveState.kind === "live"
-              ? "text-success"
-              : liveState.kind === "error"
-                ? "text-danger"
-                : "text-muted",
-          )}
-        >
-          {liveState.kind === "live"
-            ? "✓ Saved and live"
-            : liveState.kind === "saving"
-              ? "Saving…"
-              : "message" in liveState
-                ? liveState.message
-                : ""}
-        </p>
-        <Button
-          onClick={() => void saveAndFinish()}
-          loading={finishing}
-          disabled={Boolean(missing) && !rec}
-        >
-          {!finishing && <Check />} Save &amp; finish
-        </Button>
+      {/* Always in view while scrolling: save status and the save button. */}
+      <div className="sticky bottom-0 z-30 -mx-4 mt-6 border-t border-line bg-white/95 px-4 py-3 shadow-[0_-6px_20px_rgba(15,23,42,0.08)] backdrop-blur sm:bottom-4 sm:mx-0 sm:rounded-2xl sm:border sm:px-5">
+        <div className="flex items-center gap-3">
+          <span
+            className={cn(
+              "grid h-9 w-9 shrink-0 place-items-center rounded-full",
+              liveState.kind === "live"
+                ? "bg-success/10 text-success"
+                : liveState.kind === "error"
+                  ? "bg-danger/10 text-danger"
+                  : "bg-surface text-muted",
+            )}
+            aria-hidden
+          >
+            {liveState.kind === "saving" ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : liveState.kind === "live" ? (
+              <Check className="size-4" />
+            ) : (
+              <CircleAlert className="size-4" />
+            )}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p
+              role="status"
+              className={cn(
+                "truncate text-sm font-semibold",
+                liveState.kind === "live"
+                  ? "text-success"
+                  : liveState.kind === "error"
+                    ? "text-danger"
+                    : "text-ink",
+              )}
+            >
+              {liveState.kind === "live"
+                ? "Saved · live"
+                : liveState.kind === "saving"
+                  ? "Saving your changes…"
+                  : "message" in liveState
+                    ? liveState.message
+                    : ""}
+            </p>
+            <p className="hidden truncate text-xs text-muted sm:block">
+              Everything saves by itself as you type. Press Save &amp; finish
+              when you are done.
+            </p>
+          </div>
+          <Button
+            onClick={() => void saveAndFinish()}
+            loading={finishing}
+            disabled={Boolean(missing) && !rec}
+            size="lg"
+          >
+            {!finishing && <Check />} Save &amp; finish
+          </Button>
+        </div>
       </div>
 
       <ConfirmDialog

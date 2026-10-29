@@ -11,6 +11,9 @@ A dynamic QR code and business-page platform. An administrator creates businesse
 - **Payments**: UPI ID with one-tap buttons for Google Pay, PhonePe, Paytm, CRED, BHIM and any UPI app, a UPI QR for paying from another phone, payment links (Razorpay, PayPal…) and bank details with copy buttons. A payment code can also print a plain UPI QR that payment apps scan directly.
 - **Page style**: ready-made looks, fonts, main colour, background (soft, colour, gradient, picture with darkening, or colours taken from your banner / logo), title and text colours, button style and corners.
 - **Valid until**: give any dynamic code an end date (7 days to 1 year or a chosen day). After it, scans show “not active right now” until you add time; the list shows expiring and expired codes with one-tap unlock.
+- **Codes grouped by business**: choose the business of any code (or add a new one by name on the spot), filter My QR codes by business, see them grouped “By business”, and move a code to another business without reprinting.
+- **Backup**: one ZIP with every record (JSON), a spreadsheet of all codes, print-ready QR images, uploaded pictures and PDFs, and optionally the scan history; for everything, today, this month, the last 30 days or chosen dates, for all businesses or one.
+- **Analytics**: headline figures with change against the previous period, scans over time, most scanned codes, devices, a day-and-hour heatmap, browsers, code types and the latest scans.
 - **Advanced tools** (tucked away in the menu): businesses with full profile pages, categories, files & documents, dashboard stats.
 - **Also**: analytics, contact messages, settings, audit log.
 - **Customer pages** at `/q/<code>` and `/b/<slug>`, built mobile-first and loaded with minimal JavaScript.

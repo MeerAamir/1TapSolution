@@ -55,6 +55,11 @@ export const SOCIAL_LABELS: Record<SocialPlatform | 'website', string> = {
   other: 'Link',
 }
 
+/** Name in editor dropdowns: "other" reads as a catch-all choice there. */
+export function socialPickerLabel(p: SocialPlatform | 'website'): string {
+  return p === 'other' ? 'Other (any link)' : SOCIAL_LABELS[p]
+}
+
 export interface QrTypeInfo {
   label: string
   description: string
@@ -206,6 +211,8 @@ export interface MenuItem {
   price?: string
   description?: string
   tag?: MenuTag
+  /** Own label such as "Chef's special" (besides or instead of a built-in tag). */
+  badge?: string
 }
 export interface MenuData {
   mode: 'items' | 'pdf' | 'images' | 'link'

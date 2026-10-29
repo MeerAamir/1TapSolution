@@ -5,7 +5,7 @@ import { FilePickerDialog } from '@/components/admin/FilePicker'
 import { Button } from '@/components/ui/button'
 import { Notice } from '@/components/ui/feedback'
 import { Field, Input, Select, Switch, Textarea } from '@/components/ui/form'
-import { SOCIAL_LABELS, SOCIAL_PLATFORMS, type QrType } from '@/lib/qr/types'
+import { socialPickerLabel, SOCIAL_PLATFORMS, type QrType } from '@/lib/qr/types'
 import type { FileRecord } from '@/lib/types'
 import { formatBytes } from '@/lib/utils'
 
@@ -117,7 +117,7 @@ export function DestinationFields({
               <Select {...p} value={str('platform') || 'instagram'} onChange={(e) => set('platform', e.target.value)}>
                 {SOCIAL_PLATFORMS.map((s) => (
                   <option key={s} value={s}>
-                    {SOCIAL_LABELS[s]}
+                    {socialPickerLabel(s)}
                   </option>
                 ))}
               </Select>

@@ -16,6 +16,7 @@ const QrStudio = lazy(() => import('./qr/studio/QrStudio'))
 const CategoriesPage = lazy(() => import('./categories/CategoriesPage'))
 const FilesPage = lazy(() => import('./files/FilesPage'))
 const AnalyticsPage = lazy(() => import('./analytics/AnalyticsPage'))
+const BackupPage = lazy(() => import('./backup/BackupPage'))
 const MessagesPage = lazy(() => import('./messages/MessagesPage'))
 const SettingsPage = lazy(() => import('./settings/SettingsPage'))
 
@@ -38,6 +39,7 @@ export default function AdminArea() {
               <Route path="files" element={<FilesPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
               <Route path="messages" element={<MessagesPage />} />
+              <Route path="backup" element={<BackupPage />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Routes>

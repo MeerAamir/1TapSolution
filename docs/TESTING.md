@@ -104,3 +104,14 @@ Real problems these tests found and that were fixed: anonymous visitors could ca
 | Page styles (font, gradient, buttons) reach visitors; unsafe colours, fonts and values are rejected | `tests/e2e/extras.spec.ts`, `tests/unit/menus-payments.test.ts`, `tests/db/menus-payments.test.ts` |
 | Expired codes return 410 “not active right now”, are not counted, show as Expired in the list and unlock in one tap | `tests/e2e/extras.spec.ts`, `tests/db/menus-payments.test.ts` |
 | Renewing early adds to the current end date; month ends are clamped | `tests/unit/menus-payments.test.ts` |
+
+## Businesses, backups and analytics
+
+| Behaviour | Covered by |
+| --- | --- |
+| A code can be put under a new business typed on the spot, seen grouped “By business” and moved back; page items move with it and keep their own header | `tests/e2e/handover.spec.ts`, `tests/db/grouping.test.ts` |
+| Business-page codes cannot be moved to “No business”; moving and quick businesses are admin-only | `tests/db/grouping.test.ts` |
+| A gallery takes several photos at once; the save bar stays in view while scrolling | `tests/e2e/handover.spec.ts` |
+| Analytics shows headline figures, devices and the busy-times heatmap | `tests/e2e/handover.spec.ts` |
+| The backup ZIP holds backup.json, qr-codes.csv, SVG codes and a README; date periods include whole days | `tests/e2e/handover.spec.ts`, `tests/unit/backup.test.ts` |
+

@@ -85,6 +85,11 @@ function ItemsMenu({ menu, accent: pageAccent, compact }: { menu: PublicMenu; ac
                   <p className="flex flex-wrap items-center gap-1.5 font-semibold text-ink">
                     {item.tag && <TagBadge tag={item.tag} />}
                     <span>{item.name}</span>
+                    {item.badge && (
+                      <span className="rounded-full px-1.5 text-[0.68rem] font-semibold" style={{ color: accent, boxShadow: `inset 0 0 0 1px ${accent}66` }}>
+                        {item.badge}
+                      </span>
+                    )}
                   </p>
                   {item.description && <p className="mt-0.5 text-sm leading-snug text-muted">{item.description}</p>}
                 </div>

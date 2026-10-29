@@ -92,26 +92,17 @@ export function LandingHeaderFields({
           <Field label="Short description" hint="Optional. Shown under the title." error={errors.subtitle}>
             {(p) => <Textarea {...p} rows={2} maxLength={300} value={str('subtitle')} onChange={(e) => set('subtitle', e.target.value)} />}
           </Field>
-          <details className="group" open={Boolean(str('avatar_file_id') || str('cover_file_id'))}>
-            <summary className="cursor-pointer text-sm font-medium text-signal">Profile picture and cover banner</summary>
+          <details className="group" open>
+            <summary className="cursor-pointer text-sm font-medium text-signal">Logo or profile picture</summary>
             <div className="mt-3 grid gap-4 sm:grid-cols-2">
               <ImageSlot
-                label="Profile image or logo"
+                label="Logo or profile picture"
                 round
                 businessId={businessId}
                 file={files.get(str('avatar_file_id'))}
                 onChange={(f) => {
                   if (f) onFileAdded(f)
                   set('avatar_file_id', f?.id)
-                }}
-              />
-              <ImageSlot
-                label="Cover image"
-                businessId={businessId}
-                file={files.get(str('cover_file_id'))}
-                onChange={(f) => {
-                  if (f) onFileAdded(f)
-                  set('cover_file_id', f?.id)
                 }}
               />
             </div>
