@@ -104,7 +104,7 @@ test('page images can be cropped and zoomed, and are stored small', async ({ pag
   await page.goto('/admin/qr/new')
   await page.getByRole('button', { name: /^Multi-link page/ }).click()
   await codeFromUrl(page)
-  await page.getByText('Images and custom colour').click()
+  await page.getByText('Profile picture and cover banner').click()
   const chooser = page.waitForEvent('filechooser')
   await page.getByRole('button', { name: 'Upload', exact: true }).first().click()
   await (await chooser).setFiles({ name: 'portrait.png', mimeType: 'image/png', buffer: photo(2000, 1400) })

@@ -96,3 +96,20 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Visitor page styles (see components/public/PageTheme.tsx). */
+.themed {
+  font-family: var(--page-font);
+}
+.themed h1,
+.themed h2,
+.themed h3,
+.themed .t-title {
+  font-family: var(--page-title-font);
+}
+.themed .t-title {
+  color: var(--page-title);
+}
+.themed .t-text {
+  color: var(--page-text);
+}

@@ -1,10 +1,12 @@
-import { FileText, Globe, Mail, MapPin, MessageCircle, Phone, UserPlus, Wifi } from 'lucide-react'
+import { FileText, Globe, Mail, MapPin, MessageCircle, Phone, Star, UserPlus, Wifi } from 'lucide-react'
 import { storagePublicUrl } from '@/config'
-import { mailtoLink, mapsLink, telLink, whatsappLink } from '@/lib/qr/destinations'
-import { SOCIAL_LABELS, type DestinationByType, type SocialPlatform } from '@/lib/qr/types'
+import { mailtoLink, mapsLink, reviewUrl, telLink, whatsappLink } from '@/lib/qr/destinations'
+import { SOCIAL_LABELS, type DestinationByType, type PaymentData, type SocialPlatform } from '@/lib/qr/types'
 import type { PublicBlock, PublicFile } from '@/lib/types'
 import { formatBytes } from '@/lib/utils'
 import { CopyButton, downloadVcard } from './actions'
+import { MenuBlock, type PublicMenu } from './Menu'
+import { PaymentCard } from './Payment'
 import { ActionLink } from './primitives'
 import { SocialIcon } from './SocialIcon'
 
@@ -25,9 +27,9 @@ function BlockView({ block, accent }: { block: PublicBlock; accent: string }) {
   const d = block.data
   switch (block.type) {
     case 'heading':
-      return <h2 className="pt-2 text-xl font-bold tracking-[-0.01em] text-ink">{str(d.text)}</h2>
+      return <h2 className="t-title pt-2 text-xl font-bold tracking-[-0.01em] text-ink">{str(d.text)}</h2>
     case 'text':
-      return <p className="whitespace-pre-line text-[0.97rem] leading-relaxed text-ink/85">{str(d.text)}</p>
+      return <p className="t-text whitespace-pre-line text-[0.97rem] leading-relaxed text-ink/85">{str(d.text)}</p>
     case 'image':
       return d.file ? (
         <figure className="overflow-hidden rounded-xl bg-line/40">
@@ -88,6 +90,23 @@ function BlockView({ block, accent }: { block: PublicBlock; accent: string }) {
       )
     case 'contact':
       return <ContactBlock card={d as unknown as DestinationByType['contact_card']} accent={accent} />
+    case 'menu':
+      return <MenuBlock menu={d as unknown as PublicMenu} accent={accent} />
+    case 'payment':
+      return <PaymentCard data={d as unknown as PaymentData} accent={accent} compact />
+    case 'review': {
+      const href = reviewUrl(d as { url?: string; place_id?: string })
+      return href ? (
+        <ActionLink href={href} accent={accent} external variant="outline">
+          <span className="flex text-amber-400" aria-hidden>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Star key={i} className="size-4 fill-current" />
+            ))}
+          </span>
+          {str(d.label) || 'Rate us on Google'}
+        </ActionLink>
+      ) : null
+    }
     case 'wifi':
       return <WifiBlock ssid={str(d.ssid)} password={str(d.password)} open={str(d.encryption) === 'nopass'} accent={accent} />
     default:

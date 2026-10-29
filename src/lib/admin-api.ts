@@ -24,7 +24,7 @@ import type { BusinessFormValues } from './validation/business'
 
 const sb = () => getSupabase()
 
-export type LifecycleFilter = 'live' | 'active' | 'inactive' | 'archived' | 'all'
+export type LifecycleFilter = 'live' | 'active' | 'inactive' | 'archived' | 'all' | 'expired' | 'expiring'
 
 /** PostgREST "ilike" pattern with wildcard characters escaped. */
 function likePattern(term: string): string {
@@ -79,6 +79,12 @@ export async function listBusinesses(p: BusinessListParams): Promise<{ rows: Bus
   if (p.lifecycle === 'active') q = q.is('archived_at', null).eq('status', 'active')
   if (p.lifecycle === 'inactive') q = q.is('archived_at', null).eq('status', 'inactive')
   if (p.lifecycle === 'archived') q = q.not('archived_at', 'is', null)
+  if (p.lifecycle === 'expired') q = q.is('archived_at', null).lte('expires_at', new Date().toISOString())
+  if (p.lifecycle === 'expiring')
+    q = q
+      .is('archived_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .lte('expires_at', new Date(Date.now() + 30 * 86_400_000).toISOString())
   q = q.order(p.sort, { ascending: p.ascending, nullsFirst: false }).order('id')
   const from = p.page * p.pageSize
   const { data, error, count } = await q.range(from, from + p.pageSize - 1)
@@ -268,6 +274,12 @@ export async function listQrCodes(p: QrListParams): Promise<{ rows: QrOverview[]
   if (p.lifecycle === 'active') q = q.is('archived_at', null).eq('status', 'active')
   if (p.lifecycle === 'inactive') q = q.is('archived_at', null).eq('status', 'inactive')
   if (p.lifecycle === 'archived') q = q.not('archived_at', 'is', null)
+  if (p.lifecycle === 'expired') q = q.is('archived_at', null).lte('expires_at', new Date().toISOString())
+  if (p.lifecycle === 'expiring')
+    q = q
+      .is('archived_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .lte('expires_at', new Date(Date.now() + 30 * 86_400_000).toISOString())
   q = q.order(p.sort, { ascending: p.ascending, nullsFirst: false }).order('id')
   const from = p.page * p.pageSize
   const { data, error, count } = await q.range(from, from + p.pageSize - 1)
@@ -282,6 +294,8 @@ export async function getQr(id: string): Promise<QrOverview> {
 export type QrInput = Pick<QrCodeRecord, 'business_id' | 'name' | 'description' | 'type' | 'destination' | 'file_id' | 'design'> & {
   /** Chosen in the browser so the code can be shown (and printed) before the first save. */
   public_code?: string
+  /** After this moment scans show "not active"; null = no end date. */
+  expires_at?: string | null
 }
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
@@ -314,6 +328,7 @@ export async function duplicateQr(source: QrCodeRecord): Promise<QrCodeRecord> {
     destination: source.destination,
     file_id: source.file_id,
     design: source.design,
+    expires_at: source.expires_at ?? null,
   })
   if (source.type === 'landing_page') {
     const blocks = await listBlocks(source.business_id, source.id)

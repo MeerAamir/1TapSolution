@@ -103,6 +103,8 @@ export interface FileOverview extends FileRecord {
 
 export interface QrCodeRecord {
   id: string
+  /** After this moment the code shows "not active" until it is renewed. */
+  expires_at?: string | null
   public_code: string
   business_id: string
   name: string
@@ -145,6 +147,9 @@ export type BlockType =
   | 'email'
   | 'contact'
   | 'wifi'
+  | 'menu'
+  | 'payment'
+  | 'review'
 
 export interface ContentBlock {
   id: string
@@ -226,7 +231,7 @@ export interface PublicBusiness {
 }
 
 export interface PublicQrPayload {
-  state: 'ok' | 'not_found' | 'unavailable' | 'static'
+  state: 'ok' | 'not_found' | 'unavailable' | 'expired' | 'static'
   code?: string
   type?: QrType
   destination?: Record<string, unknown> & { file?: PublicFile | null; avatar?: PublicFile | null; cover?: PublicFile | null }

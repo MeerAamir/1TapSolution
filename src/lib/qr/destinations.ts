@@ -74,9 +74,54 @@ export function redirectUrlFor(type: QrType, destination: unknown): string | nul
         : null
     case 'maps':
       return mapsLink(d as DestinationByType['maps'])
+    case 'review':
+      return reviewUrl(d as DestinationByType['review'])
+    case 'menu':
+      return d.mode === 'link' && isSafeHttpUrl(d.url) ? d.url : null
     default:
       return null
   }
+}
+
+/** The Google "write a review" page for a review link or a Place ID. */
+export function reviewUrl(d: { url?: string; place_id?: string }): string | null {
+  if (d.url && isSafeHttpUrl(d.url)) return d.url
+  if (d.place_id && /^[A-Za-z0-9_-]{10,200}$/.test(d.place_id)) {
+    return `https://search.google.com/local/writereview?placeid=${encodeURIComponent(d.place_id)}`
+  }
+  return null
+}
+
+const UPI_ID = /^[A-Za-z0-9._-]{2,200}@[A-Za-z][A-Za-z0-9]{1,63}$/
+
+/**
+ * A UPI payment request (NPCI deep link). Every UPI app understands it: GPay,
+ * PhonePe, Paytm, CRED, BHIM, WhatsApp Pay and bank apps.
+ */
+export function upiLink(d: { upi_id?: string; payee_name?: string; amount?: number; note?: string }, scheme = 'upi://pay'): string | null {
+  if (!d.upi_id || !UPI_ID.test(d.upi_id)) return null
+  const p = new URLSearchParams({ pa: d.upi_id })
+  if (d.payee_name) p.set('pn', d.payee_name)
+  if (d.amount && d.amount > 0) p.set('am', d.amount.toFixed(2))
+  p.set('cu', 'INR')
+  if (d.note) p.set('tn', d.note)
+  // Some UPI apps are strict about an encoded @ in the payee address, so keep it literal.
+  return `${scheme}?${p.toString().replace(/\+/g, '%20').replace(/%40/g, '@')}`
+}
+
+/** App-specific links: open one payment app straight away (useful on iPhone). */
+export const UPI_APPS = [
+  { id: 'gpay', name: 'Google Pay', scheme: 'gpay://upi/pay', android: 'tez://upi/pay' },
+  { id: 'phonepe', name: 'PhonePe', scheme: 'phonepe://pay', android: 'phonepe://pay' },
+  { id: 'paytm', name: 'Paytm', scheme: 'paytmmp://pay', android: 'paytmmp://pay' },
+  { id: 'cred', name: 'CRED', scheme: 'credpay://upi/pay', android: 'credpay://upi/pay' },
+  { id: 'bhim', name: 'BHIM', scheme: 'upi://pay', android: 'upi://pay' },
+] as const
+
+/** True when the printed code contains the content itself (no link to our site). */
+export function isStaticQr(type: QrType, destination: unknown): boolean {
+  const d = (destination ?? {}) as Record<string, unknown>
+  return type === 'wifi' || (type === 'payment' && d.direct === true && typeof d.upi_id === 'string' && UPI_ID.test(d.upi_id))
 }
 
 /** Escape per the de-facto WIFI: QR format (ZXing): \ ; , : " */
@@ -118,5 +163,6 @@ export function vcardText(d: DestinationByType['contact_card']): string {
 /** What a QR code of this type physically encodes. */
 export function encodedContent(type: QrType, destination: unknown, dynamicUrl: string): string {
   if (type === 'wifi') return wifiPayload(destination as DestinationByType['wifi'])
+  if (isStaticQr(type, destination)) return upiLink(destination as DestinationByType['payment']) ?? dynamicUrl
   return dynamicUrl
 }

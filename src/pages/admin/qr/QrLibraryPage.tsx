@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, Copy, CopyPlus, Download, ExternalLink, MoreHorizontal, Pause, Play, Plus, Printer, QrCode, Share2, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, CalendarClock, CalendarPlus, Copy, CopyPlus, Download, ExternalLink, MoreHorizontal, Pause, Play, Plus, Printer, QrCode, Share2, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -12,13 +12,14 @@ import { ConfirmDialog, Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger 
 import { qrPublicUrl, storagePublicUrl } from '@/config'
 import { deleteQr, duplicateQr, getFile, listQrCodes, updateQr, type LifecycleFilter } from '@/lib/admin-api'
 import { parseDesign } from '@/lib/qr/design'
-import { encodedContent } from '@/lib/qr/destinations'
+import { encodedContent, isStaticQr } from '@/lib/qr/destinations'
+import { expiryInfo, expiryLabel, extendExpiry } from '@/lib/qr/expiry'
 import { downloadPng, imageUrlToDataUrl, printQr, safeFilename, shareQr } from '@/lib/qr/export'
 import { friendlyError } from '@/lib/supabase'
 import type { QrOverview } from '@/lib/types'
 import { useQuery } from '@/lib/use-query'
 import { cn, formatNumber, relativeTime } from '@/lib/utils'
-import { TYPE_LABEL, TYPE_TILES, typeIcon } from './studio/typeTiles'
+import { TYPE_LABEL, TYPE_TILES, typeColor, typeIcon } from './studio/typeTiles'
 
 const PAGE_SIZE = 24
 
@@ -50,8 +51,9 @@ function QrCard({ q, onChanged, onDelete }: { q: QrOverview; onChanged: () => vo
   const url = qrPublicUrl(q.public_code)
   const design = parseDesign(q.design)
   const content = encodedContent(q.type, q.destination, url)
-  const isStatic = q.type === 'wifi'
-  const paused = q.status !== 'active' || q.archived_at
+  const isStatic = isStaticQr(q.type, q.destination)
+  const expiry = isStatic ? ({ kind: 'none' } as const) : expiryInfo(q.expires_at)
+  const paused = q.status !== 'active' || q.archived_at || expiry.kind === 'expired'
   const logoDataUrl = useLogoDataUrl(design.logoFileId, design.logo)
   const opts = { logoDataUrl, businessName: q.type === 'business_profile' && q.business_name ? q.business_name : q.name }
 
@@ -71,15 +73,29 @@ function QrCard({ q, onChanged, onDelete }: { q: QrOverview; onChanged: () => vo
         <div className={cn('mx-auto w-full sm:w-36', paused && 'opacity-40')}>
           <QrSvg text={content} design={design} logoDataUrl={logoDataUrl} businessName={opts.businessName} label="" />
         </div>
-        {paused && (
-          <span className="absolute left-1.5 top-1.5 rounded-full sm:left-3 sm:top-3 bg-warning-soft px-2 py-0.5 text-xs font-semibold text-warning">
-            {q.archived_at ? 'Archived' : 'Paused'}
+        {paused ? (
+          <span
+            className={cn(
+              'absolute left-1.5 top-1.5 rounded-full px-2 py-0.5 text-xs font-semibold sm:left-3 sm:top-3',
+              expiry.kind === 'expired' && !q.archived_at ? 'bg-danger/10 text-danger' : 'bg-warning-soft text-warning',
+            )}
+          >
+            {q.archived_at ? 'Archived' : expiry.kind === 'expired' ? 'Expired' : 'Paused'}
           </span>
-        )}
+        ) : expiry.kind === 'active' && expiry.daysLeft <= 30 ? (
+          <span className="absolute left-1.5 top-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 sm:left-3 sm:top-3">
+            {expiryLabel(expiry)}
+          </span>
+        ) : null}
       </Link>
       <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-3 sm:gap-3 sm:p-4">
         <div className="flex items-start gap-2">
-          <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-signal-soft text-signal [&_svg]:size-3.5">{typeIcon(q.type)}</span>
+          <span
+            className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg [&_svg]:size-3.5"
+            style={{ backgroundColor: `${typeColor(q.type)}16`, color: typeColor(q.type) }}
+          >
+            {typeIcon(q.type)}
+          </span>
           <div className="min-w-0 flex-1">
             <Link to={`/admin/qr/${q.id}`} className="block truncate font-semibold hover:text-signal">
               {q.name}
@@ -89,6 +105,12 @@ function QrCard({ q, onChanged, onDelete }: { q: QrOverview; onChanged: () => vo
               {q.business_name ? ` · ${q.business_name}` : ''}
               {!isStatic && ` · ${formatNumber(q.scan_count)} scans`}
             </p>
+            {expiry.kind !== 'none' && (
+              <p className={cn('mt-0.5 flex items-center gap-1 text-xs', expiry.kind === 'expired' ? 'font-medium text-danger' : 'text-muted')}>
+                <CalendarClock className="size-3" />
+                {expiry.kind === 'expired' ? `Expired ${expiry.date}` : `Valid until ${expiry.date}`}
+              </p>
+            )}
           </div>
           <Menu>
             <MenuTrigger asChild>
@@ -110,6 +132,34 @@ function QrCard({ q, onChanged, onDelete }: { q: QrOverview; onChanged: () => vo
                   >
                     <Copy /> Copy link
                   </MenuItem>
+                </>
+              )}
+              {!isStatic && (
+                <>
+                  <MenuSeparator />
+                  {(
+                    [
+                      ['1 month', 1],
+                      ['3 months', 3],
+                      ['1 year', 12],
+                    ] as const
+                  ).map(([label, months]) => (
+                    <MenuItem
+                      key={label}
+                      onSelect={() => {
+                        const until = extendExpiry(q.expires_at, { label, months })
+                        void act(() => updateQr(q.id, { expires_at: until }), `${expiry.kind === 'expired' ? 'Unlocked' : 'Valid'} until ${expiryInfo(until).kind === 'active' ? (expiryInfo(until) as { date: string }).date : ''}`)
+                      }}
+                    >
+                      <CalendarPlus /> {expiry.kind === 'expired' ? 'Unlock' : expiry.kind === 'none' ? 'Valid for' : 'Add'} {label}
+                    </MenuItem>
+                  ))}
+                  {q.expires_at && (
+                    <MenuItem onSelect={() => act(() => updateQr(q.id, { expires_at: null }), 'No end date')}>
+                      <CalendarClock /> Remove end date
+                    </MenuItem>
+                  )}
+                  <MenuSeparator />
                 </>
               )}
               <MenuItem
@@ -248,6 +298,8 @@ export default function QrLibraryPage() {
           <option value="live">Live and paused</option>
           <option value="active">Live</option>
           <option value="inactive">Paused</option>
+          <option value="expiring">Ending within 30 days</option>
+          <option value="expired">Expired</option>
           <option value="archived">Archived</option>
           <option value="all">Everything</option>
         </Select>

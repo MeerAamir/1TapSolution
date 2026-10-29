@@ -4,6 +4,7 @@ import { storagePublicUrl } from '@/config'
 import type { PublicBlock, PublicFile } from '@/lib/types'
 import { copyText } from './actions'
 import { BlockList } from './Blocks'
+import { safeAccent, ThemeShell, type PublicTheme } from './PageTheme'
 import { DemoRibbon, PoweredBy } from './primitives'
 
 export interface LandingHeader {
@@ -12,6 +13,7 @@ export interface LandingHeader {
   accent?: string
   avatar?: PublicFile | null
   cover?: PublicFile | null
+  theme?: PublicTheme | null
 }
 
 export const DEFAULT_LANDING_ACCENT = '#2563EB'
@@ -61,7 +63,10 @@ export function LandingView({
   /** In the dashboard preview: no share button, no page title changes. */
   preview?: boolean
 }) {
-  const accent = header.accent || DEFAULT_LANDING_ACCENT
+  const accent = header.theme?.accent || header.accent || DEFAULT_LANDING_ACCENT
+  const strong = safeAccent(header.theme, accent)
+  // A styled background already frames the page; the plain colour band is only for the default look.
+  const styledBg = Boolean(header.theme?.bg_type && header.theme.bg_type !== 'soft')
   const title = header.title?.trim()
 
   useEffect(() => {
@@ -76,7 +81,7 @@ export function LandingView({
     .toUpperCase()
 
   return (
-    <div className="min-h-full bg-surface" style={{ backgroundImage: `linear-gradient(180deg, ${accent}1F 0, transparent 22rem)` }}>
+    <ThemeShell theme={header.theme} accent={accent}>
       {isDemo && <DemoRibbon />}
       <main className="mx-auto w-full max-w-md px-4 pb-4 pt-4">
         <div className="relative">
@@ -86,8 +91,10 @@ export function LandingView({
               alt=""
               className="h-40 w-full rounded-3xl object-cover"
             />
+          ) : styledBg ? (
+            <div className="h-16 w-full" />
           ) : (
-            <div className="h-28 w-full rounded-3xl" style={{ background: `linear-gradient(135deg, ${accent}, ${accent}B3)` }} />
+            <div className="h-28 w-full rounded-3xl" style={{ background: `linear-gradient(135deg, ${strong}, ${strong}B3)` }} />
           )}
           {!preview && (
             <div className="absolute right-3 top-3">
@@ -105,23 +112,23 @@ export function LandingView({
           ) : (
             <div
               className="grid h-24 w-24 place-items-center rounded-full bg-white text-2xl font-bold shadow-raise ring-4 ring-white"
-              style={{ color: accent }}
+              style={{ color: strong }}
             >
               {initials}
             </div>
           )}
-          {title && <h1 className="mt-4 text-2xl font-bold tracking-[-0.02em] text-ink">{title}</h1>}
-          {header.subtitle?.trim() && <p className="mt-1.5 whitespace-pre-line text-[0.97rem] leading-relaxed text-ink/70">{header.subtitle}</p>}
+          {title && <h1 className="t-title mt-4 text-2xl font-bold tracking-[-0.02em] text-ink">{title}</h1>}
+          {header.subtitle?.trim() && <p className="t-text mt-1.5 whitespace-pre-line text-[0.97rem] leading-relaxed text-ink/70">{header.subtitle}</p>}
         </div>
         <div className="mt-6">
           {blocks.length ? (
-            <BlockList blocks={blocks} accent={accent} />
+            <BlockList blocks={blocks} accent={strong} />
           ) : (
             <p className="rounded-2xl border border-dashed border-line-strong px-4 py-8 text-center text-sm text-muted">Nothing here yet.</p>
           )}
         </div>
       </main>
       <PoweredBy />
-    </div>
+    </ThemeShell>
   )
 }

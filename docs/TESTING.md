@@ -92,3 +92,15 @@ Real problems these tests found and that were fixed: anonymous visitors could ca
 | Invalid content is never saved, so printed codes keep opening the last good content | `tests/e2e/lifecycle.spec.ts` (changing the destination) |
 | The hidden workspace owner is admin-only, never listed as a business and never shown to visitors | `tests/db/studio.test.ts` |
 | Download (PNG, SVG, PDF) from the studio produces codes that decode to the permanent link | `tests/e2e/lifecycle.spec.ts` |
+
+## Menus, payments, reviews, page style and end dates
+
+| Behaviour | Covered by |
+| --- | --- |
+| Menu codes show sections, prices and veg marks; blank rows are ignored; photo/PDF menus resolve their files and refuse deleting files in use | `tests/e2e/extras.spec.ts`, `tests/unit/menus-payments.test.ts`, `tests/db/menus-payments.test.ts` |
+| Payment pages build correct UPI links for every app; invalid UPI IDs, amounts, IFSC and unsafe links are refused in the browser and the database | `tests/e2e/extras.spec.ts`, `tests/unit/menus-payments.test.ts`, `tests/db/menus-payments.test.ts` |
+| A plain UPI code encodes the payment itself and decodes back exactly | `tests/unit/menus-payments.test.ts` |
+| Google review codes redirect to the review form (link or Place ID) | `tests/e2e/extras.spec.ts`, `tests/unit/menus-payments.test.ts` |
+| Page styles (font, gradient, buttons) reach visitors; unsafe colours, fonts and values are rejected | `tests/e2e/extras.spec.ts`, `tests/unit/menus-payments.test.ts`, `tests/db/menus-payments.test.ts` |
+| Expired codes return 410 “not active right now”, are not counted, show as Expired in the list and unlock in one tap | `tests/e2e/extras.spec.ts`, `tests/db/menus-payments.test.ts` |
+| Renewing early adds to the current end date; month ends are clamped | `tests/unit/menus-payments.test.ts` |

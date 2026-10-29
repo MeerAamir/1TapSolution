@@ -81,3 +81,64 @@ export async function processImage(file: File, opts: { area?: PixelArea | null; 
 export function formatKb(bytes: number): string {
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
+
+const toHex = (n: number) => n.toString(16).padStart(2, '0')
+
+/**
+ * The main colours of a picture (for "match my banner/logo"): strongest,
+ * reasonably saturated colours first, then a darker and a lighter fallback.
+ */
+export async function dominantColors(url: string, count = 3): Promise<string[]> {
+  const blob = await (await fetch(url, { mode: 'cors' })).blob()
+  const bmp = await createImageBitmap(blob)
+  const size = 48
+  const c = document.createElement('canvas')
+  c.width = c.height = size
+  const ctx = c.getContext('2d', { willReadFrequently: true })
+  if (!ctx) return []
+  ctx.drawImage(bmp, 0, 0, size, size)
+  bmp.close()
+  const data = ctx.getImageData(0, 0, size, size).data
+  const buckets = new Map<string, { r: number; g: number; b: number; n: number; score: number }>()
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] < 200) continue
+    const r = data[i]
+    const g = data[i + 1]
+    const b = data[i + 2]
+    const max = Math.max(r, g, b)
+    const min = Math.min(r, g, b)
+    const sat = max === 0 ? 0 : (max - min) / max
+    const light = (max + min) / 510
+    if (light > 0.94 || light < 0.06) continue // ignore paper-white and pure black
+    const key = `${r >> 5}-${g >> 5}-${b >> 5}`
+    const e = buckets.get(key) ?? { r: 0, g: 0, b: 0, n: 0, score: 0 }
+    e.r += r
+    e.g += g
+    e.b += b
+    e.n += 1
+    e.score += 0.35 + sat
+    buckets.set(key, e)
+  }
+  const sorted = [...buckets.values()].sort((a, b) => b.score - a.score)
+  const out: string[] = []
+  for (const e of sorted) {
+    const hex = `#${toHex(Math.round(e.r / e.n))}${toHex(Math.round(e.g / e.n))}${toHex(Math.round(e.b / e.n))}`.toUpperCase()
+    // Skip colours too close to one already picked.
+    const near = out.some((o) => {
+      const d = [1, 3, 5].reduce((s, k) => s + Math.abs(parseInt(o.slice(k, k + 2), 16) - parseInt(hex.slice(k, k + 2), 16)), 0)
+      return d < 90
+    })
+    if (!near) out.push(hex)
+    if (out.length >= count) break
+  }
+  return out
+}
+
+/** Mix a colour with white (amount 0–1), for soft backgrounds. */
+export function tint(hex: string, amount: number): string {
+  const ch = (k: number) => {
+    const v = parseInt(hex.slice(k, k + 2), 16)
+    return toHex(Math.round(v + (255 - v) * amount))
+  }
+  return `#${ch(1)}${ch(3)}${ch(5)}`.toUpperCase()
+}

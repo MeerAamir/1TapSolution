@@ -23,7 +23,7 @@ export interface EdgeEnv {
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
 
 export interface QrPayload {
-  state: 'ok' | 'not_found' | 'unavailable' | 'static'
+  state: 'ok' | 'not_found' | 'unavailable' | 'expired' | 'static'
   code?: string
   type?: QrType
   destination?: Record<string, unknown> & { file?: { path: string; version?: number } | null }
@@ -146,7 +146,7 @@ export async function handleQrRequest(
   }
 
   const html = await loadIndexHtml()
-  const status = payload?.state === 'not_found' ? 404 : payload?.state === 'unavailable' ? 410 : 200
+  const status = payload?.state === 'not_found' ? 404 : payload?.state === 'unavailable' || payload?.state === 'expired' ? 410 : 200
   return new Response(payload ? injectPayload(html, payload) : html, {
     status,
     headers: { ...baseHeaders, 'Content-Type': 'text/html; charset=utf-8' },

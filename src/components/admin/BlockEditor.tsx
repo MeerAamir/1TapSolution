@@ -15,7 +15,10 @@ import {
   Share2,
   Trash2,
   Type,
+  Star,
   UserSquare,
+  UtensilsCrossed,
+  Wallet,
   Wifi,
 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
@@ -26,6 +29,9 @@ import { isSafeHttpUrl } from '@/lib/qr/destinations'
 import { SOCIAL_LABELS, SOCIAL_PLATFORMS } from '@/lib/qr/types'
 import type { BlockType, FileRecord } from '@/lib/types'
 import { FilePickerDialog, UploadButton } from './FilePicker'
+import type { ZodType } from 'zod'
+import { DEFAULT_MENU, MenuFields, PaymentFields, ReviewFields, visibleErrors } from '@/pages/admin/qr/studio/ExtraFields'
+import { menuSchema, paymentSchema, reviewSchema } from '@/lib/validation/qr'
 
 export interface DraftBlock {
   key: string
@@ -35,6 +41,9 @@ export interface DraftBlock {
 
 export const BLOCK_TYPES: Array<{ type: BlockType; label: string; icon: ReactNode; hidden?: boolean }> = [
   { type: 'link', label: 'Link', icon: <Link2 /> },
+  { type: 'menu', label: 'Menu', icon: <UtensilsCrossed /> },
+  { type: 'payment', label: 'Payment / UPI', icon: <Wallet /> },
+  { type: 'review', label: 'Google review', icon: <Star /> },
   { type: 'document', label: 'PDF', icon: <FileText /> },
   { type: 'text', label: 'Text', icon: <Type /> },
   { type: 'phone', label: 'Phone', icon: <Phone /> },
@@ -74,7 +83,21 @@ export function normalizeBlock(block: DraftBlock): DraftBlock {
 const phoneOk = (v: unknown) => typeof v === 'string' && /^\+?[0-9 ().-]{6,24}$/.test(v) && v.replace(/\D/g, '').length >= 6
 
 /** Mirrors public.is_valid_content_block(); returns field → message. */
+const SCHEMA_BLOCKS: Partial<Record<BlockType, ZodType>> = { menu: menuSchema, payment: paymentSchema, review: reviewSchema }
+
+function schemaResult(b: DraftBlock) {
+  const schema = SCHEMA_BLOCKS[b.type]
+  return schema ? schema.safeParse(b.data) : null
+}
+
 export function validateBlock(block: DraftBlock): Record<string, string> {
+  const parsed = schemaResult(block)
+  if (parsed) {
+    if (parsed.success) return {}
+    const e: Record<string, string> = {}
+    for (const i of parsed.error.issues) e[i.path.join('.') || '_'] ??= i.message
+    return e
+  }
   const b = normalizeBlock(block)
   const d = b.data
   const e: Record<string, string> = {}
@@ -130,6 +153,12 @@ export function validateBlock(block: DraftBlock): Record<string, string> {
 
 /** Removes empty optional strings before saving. */
 export function cleanBlockData(block: DraftBlock): Record<string, unknown> {
+  const parsed = schemaResult(block)
+  if (parsed?.success) {
+    // Drops empty optional fields (undefined) and the page-only "direct" switch.
+    const { direct: _direct, theme: _theme, ...rest } = JSON.parse(JSON.stringify(parsed.data)) as Record<string, unknown>
+    return rest
+  }
   const b = normalizeBlock(block)
   return Object.fromEntries(
     Object.entries(b.data)
@@ -264,6 +293,22 @@ function BlockFields({
           </Field>
         </div>
       )
+    case 'menu':
+      return (
+        <MenuFields
+          inBlock
+          value={d}
+          onChange={onChange}
+          errors={visibleErrors(errors, d)}
+          businessId={businessId}
+          files={new Map(files.map((f) => [f.id, f]))}
+          onFilesAdded={onFilesAdded}
+        />
+      )
+    case 'payment':
+      return <PaymentFields inBlock value={d} onChange={onChange} errors={visibleErrors(errors, d)} />
+    case 'review':
+      return <ReviewFields inBlock value={d} onChange={onChange} errors={visibleErrors(errors, d)} />
     case 'email':
       return (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -406,7 +451,11 @@ export function BlockEditor({
   const add = (type: BlockType) =>
     onChange([
       ...blocks,
-      { key: newKey(), type, data: type === 'social' ? { platform: 'instagram' } : type === 'wifi' ? { encryption: 'WPA' } : {} },
+      {
+        key: newKey(),
+        type,
+        data: type === 'social' ? { platform: 'instagram' } : type === 'wifi' ? { encryption: 'WPA' } : type === 'menu' ? structuredClone(DEFAULT_MENU) : {},
+      },
     ])
 
   return (

@@ -2,6 +2,8 @@ import {
   ArrowLeft,
   ArrowLeftRight,
   BarChart3,
+  Brush,
+  CalendarClock,
   Check,
   CopyPlus,
   FileText,
@@ -54,7 +56,8 @@ import {
   workspaceBusinessId,
 } from "@/lib/admin-api";
 import { DEFAULT_DESIGN, parseDesign, type QrDesign } from "@/lib/qr/design";
-import { encodedContent } from "@/lib/qr/destinations";
+import { encodedContent, isStaticQr } from "@/lib/qr/destinations";
+import { expiryInfo } from "@/lib/qr/expiry";
 import { QR_TYPE_INFO, type QrType } from "@/lib/qr/types";
 import { friendlyError } from "@/lib/supabase";
 import type { FileRecord, QrCodeRecord } from "@/lib/types";
@@ -64,7 +67,15 @@ import { parseDestination } from "@/lib/validation/qr";
 import { DesignPanel } from "../DesignPanel";
 import { DestinationFields } from "../DestinationFields";
 import { QrScansPanel } from "../QrScansPanel";
+import { ExpiryField } from "./ExpiryField";
+import {
+  MenuFields,
+  PaymentFields,
+  ReviewFields,
+  visibleErrors,
+} from "./ExtraFields";
 import { LandingHeaderFields } from "./LandingHeaderFields";
+import { ThemeFields } from "./ThemeFields";
 import { PhonePreview } from "./PhonePreview";
 import { StudioQrCard, type LiveState } from "./StudioQrCard";
 import { IMAGE_PRESETS } from "@/lib/image";
@@ -73,8 +84,22 @@ import {
   defaultDestination,
   TYPE_LABEL,
   TYPE_TILES,
+  typeColor,
   typeIcon,
 } from "./typeTiles";
+import type { PageTheme } from "@/lib/qr/types";
+
+/** Types whose scan opens a page that can be styled. */
+const PAGE_TYPES = new Set<QrType>([
+  "landing_page",
+  "menu",
+  "payment",
+  "text",
+  "contact_card",
+  "document",
+  "phone",
+  "email",
+]);
 
 type Draft = Record<string, unknown>;
 type BlockPayload = Array<{
@@ -162,7 +187,10 @@ function TypePicker({
               : "border-line",
           )}
         >
-          <span className="grid h-11 w-11 place-items-center rounded-xl bg-signal-soft text-signal [&_svg]:size-5">
+          <span
+            className="grid h-11 w-11 place-items-center rounded-xl [&_svg]:size-5"
+            style={{ backgroundColor: `${t.color}16`, color: t.color }}
+          >
             {t.icon}
           </span>
           <span className="font-semibold">{t.label}</span>
@@ -200,6 +228,7 @@ export default function QrStudio() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [scanCount, setScanCount] = useState(0);
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
 
   // Autosave bookkeeping.
   const [saving, setSaving] = useState(false);
@@ -245,6 +274,7 @@ export default function QrStudio() {
       setLoading(false);
       setLoadError(null);
       setChangingType(false);
+      setExpiresAt(null);
       const fromBusiness = params.get("business");
       (fromBusiness ? Promise.resolve(fromBusiness) : workspaceBusinessId())
         .then((owner) => {
@@ -275,6 +305,7 @@ export default function QrStudio() {
         setName(q.name);
         setNameTouched(true);
         setDescription(q.description ?? "");
+        setExpiresAt(q.expires_at ?? null);
         setBusinessId(q.business_id);
         setIsWorkspace(Boolean(q.business_is_workspace));
         void loadFiles(q.business_id);
@@ -331,11 +362,7 @@ export default function QrStudio() {
   // Only show a field's error once something has been typed in it.
   const shownErrors = useMemo(() => {
     if (!parsed || parsed.ok) return {};
-    return Object.fromEntries(
-      Object.entries(parsed.errors).filter(
-        ([k]) => String(destination[k] ?? "").trim() !== "",
-      ),
-    );
+    return visibleErrors(parsed.errors, destination);
   }, [parsed, destination]);
 
   const snapshot = useMemo(() => {
@@ -349,6 +376,7 @@ export default function QrStudio() {
         destination: parsed.value,
         file_id: type === "document" ? fileId : null,
         design: design as unknown as Record<string, unknown>,
+        expires_at: expiresAt,
       },
       blocks: type === "landing_page" ? blockPayload(blocks) : null,
     };
@@ -362,6 +390,7 @@ export default function QrStudio() {
     fileId,
     design,
     blocks,
+    expiresAt,
   ]);
 
   const latest = useRef(snapshot);
@@ -558,7 +587,8 @@ export default function QrStudio() {
   }
 
   const info = QR_TYPE_INFO[type];
-  const isStatic = info.mode === "static";
+  const isStatic = isStaticQr(type, parsed?.ok ? parsed.value : normalized);
+  const expiry = expiryInfo(expiresAt);
   const publicUrl = code ? qrPublicUrl(code) : "";
   const content = (() => {
     try {
@@ -594,12 +624,17 @@ export default function QrStudio() {
       ? { kind: "incomplete", message: rec ? `Not saved: ${missing}` : missing }
       : saving || pendingRef.current || !rec
         ? { kind: "saving" }
-        : rec.status !== "active" || rec.archived_at
+        : expiry.kind === "expired"
           ? {
               kind: "paused",
-              message: "Paused. Scans show “currently unavailable”.",
+              message: "Expired. Scans show “not active right now”.",
             }
-          : { kind: "live" };
+          : rec.status !== "active" || rec.archived_at
+            ? {
+                kind: "paused",
+                message: "Paused. Scans show “currently unavailable”.",
+              }
+            : { kind: "live" };
 
   const canChangeType = !rec || (rec.type !== "wifi" && type !== "wifi");
 
@@ -629,18 +664,11 @@ export default function QrStudio() {
                 blocks={blocks}
                 onChange={setBlocks}
                 errors={Object.fromEntries(
-                  blocks.map((b) => {
-                    const e = validateBlock(b);
-                    // Only complain about fields that have something in them.
-                    return [
-                      b.key,
-                      Object.fromEntries(
-                        Object.entries(e).filter(
-                          ([k]) => String(b.data[k] ?? "").trim() !== "",
-                        ),
-                      ),
-                    ];
-                  }),
+                  // Only complain about fields that have something in them.
+                  blocks.map((b) => [
+                    b.key,
+                    visibleErrors(validateBlock(b), b.data),
+                  ]),
                 )}
                 files={[...files.values()]}
                 businessId={businessId}
@@ -746,6 +774,34 @@ export default function QrStudio() {
             />
           </div>
         );
+      case "menu":
+        return (
+          <MenuFields
+            value={destination}
+            onChange={setDestination}
+            errors={shownErrors}
+            businessId={businessId}
+            files={files}
+            onFilesAdded={addFiles}
+          />
+        );
+      case "payment":
+        return (
+          <PaymentFields
+            value={destination}
+            onChange={setDestination}
+            errors={shownErrors}
+            allowDirect
+          />
+        );
+      case "review":
+        return (
+          <ReviewFields
+            value={destination}
+            onChange={setDestination}
+            errors={shownErrors}
+          />
+        );
       case "business_profile":
         return (
           <div className="grid gap-4">
@@ -846,7 +902,13 @@ export default function QrStudio() {
       </div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-signal-soft text-signal [&_svg]:size-5">
+          <span
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl [&_svg]:size-5"
+            style={{
+              backgroundColor: `${typeColor(type)}16`,
+              color: typeColor(type),
+            }}
+          >
             {typeIcon(type)}
           </span>
           <div className="min-w-0 flex-1">
@@ -970,6 +1032,47 @@ export default function QrStudio() {
             {contentFields}
           </section>
 
+          {PAGE_TYPES.has(type) &&
+            !isStatic &&
+            !(type === "document" && destination.open_mode === "direct") && (
+              <Section
+                icon={<Brush />}
+                title="Page style: fonts, colours, background"
+                defaultOpen={false}
+              >
+                {type === "landing_page" &&
+                  !isWorkspace &&
+                  destination.show_business !== false && (
+                    <Notice tone="info" className="mb-4">
+                      This page uses the business header and colours. Turn off
+                      “Use the business header” to style it here.
+                    </Notice>
+                  )}
+                <ThemeFields
+                  value={destination.theme as PageTheme | undefined}
+                  onChange={(t) => {
+                    const next = { ...destination };
+                    if (t) next.theme = t;
+                    else delete next.theme;
+                    setDestination(next);
+                  }}
+                  fallbackAccent={
+                    typeof destination.accent === "string"
+                      ? destination.accent
+                      : "#2563EB"
+                  }
+                  files={files}
+                  businessId={businessId}
+                  onFileAdded={(f) => addFiles([f])}
+                  matchImages={[
+                    files.get(String(destination.cover_file_id ?? "")),
+                    files.get(String(destination.avatar_file_id ?? "")),
+                    logoFile,
+                  ].filter((f): f is FileRecord => Boolean(f))}
+                />
+              </Section>
+            )}
+
           <Section
             icon={<Palette />}
             title="Customize the QR design"
@@ -1012,6 +1115,22 @@ export default function QrStudio() {
               }
             />
           </Section>
+
+          {!isStatic && (
+            <Section
+              icon={<CalendarClock />}
+              title={
+                expiry.kind === "none"
+                  ? "Valid until"
+                  : expiry.kind === "expired"
+                    ? "Valid until · expired"
+                    : `Valid until · ${expiry.date}`
+              }
+              defaultOpen={expiry.kind === "expired"}
+            >
+              <ExpiryField value={expiresAt} onChange={setExpiresAt} />
+            </Section>
+          )}
 
           <Section icon={<Settings2 />} title="Details" defaultOpen={false}>
             <div className="grid gap-4">

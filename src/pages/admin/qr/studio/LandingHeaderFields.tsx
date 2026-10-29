@@ -1,12 +1,10 @@
-import { Check, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { UploadButton } from '@/components/admin/FilePicker'
-import { ColorInput, Field, Input, Switch, Textarea } from '@/components/ui/form'
+import { Field, Input, Switch, Textarea } from '@/components/ui/form'
 import { storagePublicUrl } from '@/config'
 import { IMAGE_PRESETS } from '@/lib/image'
 import type { FileRecord } from '@/lib/types'
 import { cn } from '@/lib/utils'
-
-const SWATCHES = ['#2563EB', '#7C3AED', '#DB2777', '#DC2626', '#EA580C', '#CA8A04', '#16A34A', '#0D9488', '#0F172A']
 
 function ImageSlot({
   label,
@@ -53,7 +51,7 @@ function ImageSlot({
   )
 }
 
-/** Title, subtitle, colour and images at the top of a multi-link page. */
+/** Title, subtitle and images at the top of a multi-link page. */
 export function LandingHeaderFields({
   value,
   onChange,
@@ -74,7 +72,6 @@ export function LandingHeaderFields({
 }) {
   const set = (k: string, v: unknown) => onChange({ ...value, [k]: v })
   const str = (k: string) => (typeof value[k] === 'string' ? (value[k] as string) : '')
-  const accent = str('accent') || '#2563EB'
   const showBusiness = canShowBusiness && value.show_business !== false
 
   return (
@@ -89,34 +86,14 @@ export function LandingHeaderFields({
       )}
       {!showBusiness && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Page title" error={errors.title}>
-              {(p) => <Input {...p} maxLength={160} placeholder="e.g. Chinar Café" value={str('title')} onChange={(e) => set('title', e.target.value)} />}
-            </Field>
-            <div className="grid gap-1.5">
-              <p className="text-sm font-medium">Colour</p>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {SWATCHES.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    aria-label={`Colour ${c}`}
-                    aria-pressed={accent.toUpperCase() === c}
-                    onClick={() => set('accent', c)}
-                    className="grid h-8 w-8 place-items-center rounded-full ring-1 ring-black/10"
-                    style={{ backgroundColor: c }}
-                  >
-                    {accent.toUpperCase() === c && <Check className="size-4 text-white" />}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          <Field label="Page title" error={errors.title}>
+            {(p) => <Input {...p} maxLength={160} placeholder="e.g. Chinar Café" value={str('title')} onChange={(e) => set('title', e.target.value)} />}
+          </Field>
           <Field label="Short description" hint="Optional. Shown under the title." error={errors.subtitle}>
             {(p) => <Textarea {...p} rows={2} maxLength={300} value={str('subtitle')} onChange={(e) => set('subtitle', e.target.value)} />}
           </Field>
-          <details className="group">
-            <summary className="cursor-pointer text-sm font-medium text-signal">Images and custom colour</summary>
+          <details className="group" open={Boolean(str('avatar_file_id') || str('cover_file_id'))}>
+            <summary className="cursor-pointer text-sm font-medium text-signal">Profile picture and cover banner</summary>
             <div className="mt-3 grid gap-4 sm:grid-cols-2">
               <ImageSlot
                 label="Profile image or logo"
@@ -137,9 +114,6 @@ export function LandingHeaderFields({
                   set('cover_file_id', f?.id)
                 }}
               />
-              <Field label="Custom colour" error={errors.accent}>
-                {(p) => <ColorInput {...p} value={accent} onChange={(v) => set('accent', v)} />}
-              </Field>
             </div>
           </details>
         </>

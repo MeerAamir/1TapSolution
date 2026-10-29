@@ -1,4 +1,4 @@
-import { ExternalLink, Wifi } from 'lucide-react'
+import { ExternalLink, Wallet, Wifi } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { BusinessProfile } from '@/components/public/BusinessProfile'
 import { fetchPublicBusiness } from '@/lib/public-api'
@@ -9,7 +9,32 @@ import { QrDestinationView } from '@/components/public/QrDestinationView'
 import { redirectUrlFor } from '@/lib/qr/destinations'
 import type { QrType } from '@/lib/qr/types'
 import type { FileRecord, PublicBlock, PublicBusiness, PublicQrPayload } from '@/lib/types'
+import type { PublicTheme } from '@/components/public/PageTheme'
+import { isStaticQr, upiLink } from '@/lib/qr/destinations'
 import { toPublicFile } from './typeTiles'
+
+/** Editor theme (file id) to what visitors receive (resolved file). */
+export function previewTheme(theme: unknown, files: Map<string, FileRecord>): PublicTheme | undefined {
+  if (!theme || typeof theme !== 'object') return undefined
+  const { bg_image_file_id, ...rest } = theme as Record<string, unknown>
+  const f = typeof bg_image_file_id === 'string' ? files.get(bg_image_file_id) : undefined
+  return { ...rest, bg_image: f ? toPublicFile(f) : null } as PublicTheme
+}
+
+/** Menu data with its file ids resolved, as visitors receive it. */
+function resolveMenu(d: Record<string, unknown>, files: Map<string, FileRecord>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...d }
+  if (typeof d.file_id === 'string') {
+    const f = files.get(d.file_id)
+    out.file = f ? toPublicFile(f) : null
+  }
+  if (Array.isArray(d.file_ids)) {
+    out.files = (d.file_ids as string[]).map((id) => files.get(id)).filter(Boolean).map((f) => toPublicFile(f!))
+  }
+  delete out.file_id
+  delete out.file_ids
+  return out
+}
 
 function Frame({ children }: { children: React.ReactNode }) {
   return (
@@ -59,6 +84,12 @@ export function previewBlocks(blocks: DraftBlock[], files: Map<string, FileRecor
       if (!f) continue
       data.file = toPublicFile(f)
     }
+    if (b.type === 'menu') {
+      const m = resolveMenu(data, files)
+      if ((m.mode === 'pdf' && !m.file) || (m.mode === 'images' && !(m.files as unknown[]).length)) continue
+      out.push({ id: b.key, type: b.type, data: m })
+      continue
+    }
     if (b.type === 'gallery') {
       data.files = ((b.data.file_ids as string[] | undefined) ?? []).map((id) => files.get(id)).filter(Boolean).map((f) => toPublicFile(f!))
     }
@@ -99,6 +130,7 @@ export function PhonePreview({
             accent: destination.accent as string | undefined,
             avatar: file(destination.avatar_file_id),
             cover: file(destination.cover_file_id),
+            theme: previewTheme(destination.theme, files),
           }}
           blocks={previewBlocks(blocks, files)}
         />
@@ -133,6 +165,19 @@ export function PhonePreview({
     )
   }
 
+  if (isStaticQr(type, destination)) {
+    return (
+      <Frame>
+        <Explain title="Opens the payment app">
+          <Wallet className="mx-auto mb-2 size-8 text-signal" />
+          Scanning with GPay, PhonePe, Paytm or any UPI app opens the payment to{' '}
+          <strong className="break-all text-ink">{String(destination.upi_id ?? '')}</strong> straight away.
+          <span className="mt-2 block break-all font-mono text-xs">{upiLink(destination)}</span>
+        </Explain>
+      </Frame>
+    )
+  }
+
   const redirect = redirectUrlFor(type, destination)
   const file = fileId ? files.get(fileId) : undefined
   if (redirect || (type === 'document' && destination.open_mode === 'direct')) {
@@ -163,7 +208,11 @@ export function PhonePreview({
   const payload: PublicQrPayload = {
     state: 'ok',
     type,
-    destination: { ...destination, file: file ? toPublicFile(file) : undefined },
+    destination: {
+      ...(type === 'menu' ? resolveMenu(destination, files) : destination),
+      ...(type === 'document' ? { file: file ? toPublicFile(file) : undefined } : {}),
+      theme: previewTheme(destination.theme, files),
+    },
     business: { name: '', slug: '', accent_color: '#2563EB', is_workspace: true },
   }
   return (

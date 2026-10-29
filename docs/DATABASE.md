@@ -49,6 +49,7 @@ Views (`security_invoker`, so the caller's RLS applies): `admin_business_overvie
 | --- | --- | --- | --- |
 | **Deactivate** (`status = inactive`) | Page and all its codes show "currently unavailable" | Code shows "currently unavailable" | n/a |
 | **Archive** (`archived_at` set) | Same as inactive, hidden from default lists, restorable | Same, restorable | n/a |
+| **Expire** (`expires_at` passed) | n/a | Code shows "not active right now" (HTTP 410) and the scan is not counted. Setting a later date or `null` unlocks it at once. | n/a |
 | **Restore** | `archived_at = null` | `archived_at = null` | n/a |
 | **Delete** (typed confirmation) | Removes the business, its locations, hours, links, blocks and QR codes. Printed codes show "not recognised". Files are **kept** (unlinked). Scan totals are kept, unlinked. | Removes the code (and its landing blocks). Other codes are untouched. Scan totals kept, unlinked. | Refused by the database while any code, logo, cover or block uses it |
 | **Replace** | n/a | n/a | Same file record, new storage object, `version + 1`. Every reference serves the new file at once, and the old object is deleted afterwards. |

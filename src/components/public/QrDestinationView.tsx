@@ -1,25 +1,40 @@
-import { Download, ExternalLink, FileText, Mail, MessageCircle, Phone, UserPlus, Wifi } from 'lucide-react'
+import { Download, ExternalLink, FileText, Mail, MessageCircle, Phone, UserPlus, UtensilsCrossed, Wifi } from 'lucide-react'
 import { useEffect, type ReactNode } from 'react'
 import { LogoMark } from '@/components/brand/Logo'
 import { storagePublicUrl } from '@/config'
 import { mailtoLink, redirectUrlFor, telLink, whatsappLink } from '@/lib/qr/destinations'
 import { CopyButton, downloadVcard } from './actions'
-import type { DestinationByType } from '@/lib/qr/types'
+import type { DestinationByType, PaymentData } from '@/lib/qr/types'
 import type { PublicBusiness, PublicFile, PublicQrPayload } from '@/lib/types'
 import { formatBytes, formatDate } from '@/lib/utils'
 import { BlockList, documentUrls } from './Blocks'
 import { BusinessProfile } from './BusinessProfile'
 import { LandingView } from './LandingView'
+import { MenuContent, type PublicMenu } from './Menu'
+import { safeAccent, ThemeShell, type PublicTheme } from './PageTheme'
+import { PaymentCard } from './Payment'
 import { ActionLink, DemoRibbon, PoweredBy } from './primitives'
 
 /** Small branded shell for single-purpose QR pages (call, email, document, card). */
-function FocusShell({ business, children }: { business?: PublicBusiness; children: ReactNode }) {
+function FocusShell({
+  business,
+  theme,
+  accent,
+  children,
+}: {
+  business?: PublicBusiness
+  theme?: PublicTheme | null
+  accent: string
+  children: ReactNode
+}) {
   return (
-    <div className="flex min-h-dvh flex-col bg-surface">
-      {business?.is_demo && <DemoRibbon />}
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 py-10">{children}</main>
-      <PoweredBy />
-    </div>
+    <ThemeShell theme={theme} accent={accent}>
+      <div className="flex min-h-dvh flex-col">
+        {business?.is_demo && <DemoRibbon />}
+        <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 py-10">{children}</main>
+        <PoweredBy />
+      </div>
+    </ThemeShell>
   )
 }
 
@@ -39,8 +54,8 @@ function BusinessMini({ business }: { business: PublicBusiness }) {
         </div>
       )}
       <div className="min-w-0">
-        <p className="truncate font-semibold">{business.name}</p>
-        {business.tagline && <p className="truncate text-sm text-muted">{business.tagline}</p>}
+        <p className="t-title truncate font-semibold">{business.name}</p>
+        {business.tagline && <p className="t-text truncate text-sm text-muted">{business.tagline}</p>}
       </div>
     </div>
   )
@@ -72,11 +87,12 @@ export function StatusScreen({
   )
 }
 
-function DocumentView({ file, business }: { file: PublicFile; business: PublicBusiness }) {
-  const accent = business.accent_color
+function DocumentView({ file, business, theme }: { file: PublicFile; business: PublicBusiness; theme?: PublicTheme }) {
+  const accent = safeAccent(theme, business.accent_color)
   const urls = documentUrls(file)
   return (
-    <div className="min-h-dvh bg-surface">
+    <ThemeShell theme={theme} accent={accent}>
+    <div className="min-h-dvh">
       {business.is_demo && <DemoRibbon />}
       <main className="mx-auto max-w-3xl px-5 py-8">
         <BusinessMini business={business} />
@@ -110,13 +126,14 @@ function DocumentView({ file, business }: { file: PublicFile; business: PublicBu
       </main>
       <PoweredBy />
     </div>
+    </ThemeShell>
   )
 }
 
-function ContactCardView({ card, business }: { card: DestinationByType['contact_card']; business: PublicBusiness }) {
-  const accent = business.accent_color
+function ContactCardView({ card, business, theme }: { card: DestinationByType['contact_card']; business: PublicBusiness; theme?: PublicTheme }) {
+  const accent = safeAccent(theme, business.accent_color)
   return (
-    <FocusShell business={business}>
+    <FocusShell business={business} theme={theme} accent={accent}>
       <div className="overflow-hidden rounded-3xl bg-white shadow-raise ring-1 ring-line">
         <div className="h-20" style={{ background: `linear-gradient(135deg, ${accent}, ${accent}BB)` }} />
         <div className="px-6 pb-6">
@@ -195,6 +212,18 @@ export function QrDestinationView({ payload }: { payload: PublicQrPayload }) {
       />
     )
   }
+  if (payload.state === 'expired') {
+    return (
+      <StatusScreen
+        title="This QR code is not active right now"
+        message="Its plan has ended. If this is your code, contact us to renew it and it will work again straight away."
+      >
+        <a href="/#contact" className="mt-5 text-sm font-semibold text-signal underline-offset-4 hover:underline">
+          Contact 1 Tap Solution
+        </a>
+      </StatusScreen>
+    )
+  }
   if (payload.state === 'static') {
     return (
       <StatusScreen
@@ -215,20 +244,21 @@ export function QrDestinationView({ payload }: { payload: PublicQrPayload }) {
   const redirect = redirectUrlFor(type, d)
   if (redirect) return <RedirectView href={redirect} />
 
-  const accent = business.accent_color
+  const theme = (d.theme as PublicTheme | undefined) ?? undefined
+  const accent = safeAccent(theme, business.accent_color)
   switch (type) {
     case 'document': {
       const file = d.file as PublicFile | null | undefined
       if (!file) return <StatusScreen title="Document unavailable" message="The document behind this code could not be found." />
       if (d.open_mode === 'direct') return <RedirectView href={documentUrls(file).view} />
-      return <DocumentView file={file} business={business} />
+      return <DocumentView file={file} business={business} theme={theme} />
     }
     case 'phone':
       return (
-        <FocusShell business={business}>
+        <FocusShell business={business} theme={theme} accent={accent}>
           <BusinessMini business={business} />
-          <h1 className="text-2xl font-bold tracking-[-0.02em]">{(d.label as string) || 'Give us a call'}</h1>
-          <p className="mt-1 text-lg text-ink/70 tabular">{d.phone as string}</p>
+          <h1 className="t-title text-2xl font-bold tracking-[-0.02em]">{(d.label as string) || 'Give us a call'}</h1>
+          <p className="t-text mt-1 text-lg text-ink/70 tabular">{d.phone as string}</p>
           <ActionLink href={telLink(d.phone as string)} accent={accent} className="mt-6 min-h-14 text-base">
             <Phone /> Call now
           </ActionLink>
@@ -236,11 +266,11 @@ export function QrDestinationView({ payload }: { payload: PublicQrPayload }) {
       )
     case 'email':
       return (
-        <FocusShell business={business}>
+        <FocusShell business={business} theme={theme} accent={accent}>
           <BusinessMini business={business} />
-          <h1 className="text-2xl font-bold tracking-[-0.02em]">Send us an email</h1>
-          <p className="mt-1 text-ink/70">{d.email as string}</p>
-          {typeof d.subject === 'string' && d.subject && <p className="mt-1 text-sm text-muted">Subject: {d.subject}</p>}
+          <h1 className="t-title text-2xl font-bold tracking-[-0.02em]">Send us an email</h1>
+          <p className="t-text mt-1 text-ink/70">{d.email as string}</p>
+          {typeof d.subject === 'string' && d.subject && <p className="t-text mt-1 text-sm text-muted">Subject: {d.subject}</p>}
           <ActionLink
             href={mailtoLink(d.email as string, d.subject as string | undefined, d.body as string | undefined)}
             accent={accent}
@@ -253,7 +283,7 @@ export function QrDestinationView({ payload }: { payload: PublicQrPayload }) {
     case 'whatsapp':
       // Only reached if the number is invalid for a redirect; show a helpful page.
       return (
-        <FocusShell business={business}>
+        <FocusShell business={business} theme={theme} accent={accent}>
           <BusinessMini business={business} />
           <ActionLink href={whatsappLink(String(d.phone ?? ''), d.message as string | undefined)} accent={accent} external>
             <MessageCircle /> Open WhatsApp
@@ -261,18 +291,49 @@ export function QrDestinationView({ payload }: { payload: PublicQrPayload }) {
         </FocusShell>
       )
     case 'contact_card':
-      return <ContactCardView card={d as unknown as DestinationByType['contact_card']} business={business} />
+      return <ContactCardView card={d as unknown as DestinationByType['contact_card']} business={business} theme={theme} />
     case 'text':
       return (
-        <FocusShell business={business}>
+        <FocusShell business={business} theme={theme} accent={accent}>
           <BusinessMini business={business} />
-          {typeof d.title === 'string' && d.title && <h1 className="mb-3 text-2xl font-bold tracking-[-0.02em]">{d.title}</h1>}
+          {typeof d.title === 'string' && d.title && <h1 className="t-title mb-3 text-2xl font-bold tracking-[-0.02em]">{d.title}</h1>}
           <div className="rounded-2xl border border-line bg-white p-5">
             <p className="whitespace-pre-line break-words text-[1.02rem] leading-relaxed text-ink">{String(d.text ?? '')}</p>
           </div>
           <div className="mt-4">
             <CopyButton text={String(d.text ?? '')} label="Copy text" accent={accent} />
           </div>
+        </FocusShell>
+      )
+    case 'menu': {
+      const menu = d as unknown as PublicMenu
+      return (
+        <ThemeShell theme={theme} accent={accent}>
+          <div className="min-h-dvh">
+            {business.is_demo && <DemoRibbon />}
+            <main className="mx-auto w-full max-w-2xl px-4 py-8">
+              <BusinessMini business={business} />
+              <div className="mb-5 flex items-center gap-3">
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white shadow-sm ring-1 ring-line" style={{ color: accent }}>
+                  <UtensilsCrossed className="size-6" />
+                </span>
+                <div className="min-w-0">
+                  <h1 className="t-title text-2xl font-bold tracking-[-0.02em]">{menu.title || 'Menu'}</h1>
+                  {menu.note && <p className="t-text mt-0.5 text-sm">{menu.note}</p>}
+                </div>
+              </div>
+              <MenuContent menu={menu} accent={accent} />
+            </main>
+            <PoweredBy />
+          </div>
+        </ThemeShell>
+      )
+    }
+    case 'payment':
+      return (
+        <FocusShell business={business} theme={theme} accent={accent}>
+          <BusinessMini business={business} />
+          <PaymentCard data={d as unknown as PaymentData} accent={accent} />
         </FocusShell>
       )
     case 'landing_page':
@@ -285,6 +346,7 @@ export function QrDestinationView({ payload }: { payload: PublicQrPayload }) {
               accent: (d.accent as string | undefined) || undefined,
               avatar: payload.destination?.avatar,
               cover: payload.destination?.cover,
+              theme,
             }}
             blocks={business.blocks ?? []}
             isDemo={business.is_demo}

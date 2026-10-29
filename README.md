@@ -5,8 +5,12 @@
 A dynamic QR code and business-page platform. An administrator creates businesses, builds their mobile pages, and issues QR codes that point to permanent links. What a code opens (a business profile, a PDF menu, a website, WhatsApp, Google Maps, a contact card, a custom landing page and more) can be changed at any time without reprinting the code.
 
 - **Public website** with a working demo QR code, features, solutions, FAQ and a protected contact form.
-- **Simple QR studio** (the dashboard home): pick a type (website, multi-link page, PDF, contact card, text, WhatsApp, phone, email, location, social, Wi-Fi), type or paste the content, and the real code is on screen and scannable straight away. Changes save automatically. Download (PNG, SVG, PDF), share and print from the code or the list.
-- **Multi-link pages**: one code opens a page with as many items as you like (links, PDFs, text, phone, WhatsApp, email, contact card with “Save contact”, social profiles, images, gallery, map, Wi-Fi details), with a live phone preview while editing.
+- **Simple QR studio** (the dashboard home): pick a type (website, multi-link page, menu, payment / UPI, Google review, PDF, contact card, text, WhatsApp, phone, email, location, social, Wi-Fi), type or paste the content, and the real code is on screen and scannable straight away. Changes save automatically. Download (PNG, SVG, PDF), share and print from the code or the list.
+- **Multi-link pages**: one code opens a page with as many items as you like (links, PDFs, text, phone, WhatsApp, email, contact card with “Save contact”, social profiles, images, gallery, map, Wi-Fi details, a menu, UPI payments and a Google review button), with a live phone preview while editing.
+- **Menus**: typed sections and items with prices and veg / non-veg / spicy / new / popular marks, menu photos, a PDF or a link, as a code of its own or an item on a multi-link page.
+- **Payments**: UPI ID with one-tap buttons for Google Pay, PhonePe, Paytm, CRED, BHIM and any UPI app, a UPI QR for paying from another phone, payment links (Razorpay, PayPal…) and bank details with copy buttons. A payment code can also print a plain UPI QR that payment apps scan directly.
+- **Page style**: ready-made looks, fonts, main colour, background (soft, colour, gradient, picture with darkening, or colours taken from your banner / logo), title and text colours, button style and corners.
+- **Valid until**: give any dynamic code an end date (7 days to 1 year or a chosen day). After it, scans show “not active right now” until you add time; the list shows expiring and expired codes with one-tap unlock.
 - **Advanced tools** (tucked away in the menu): businesses with full profile pages, categories, files & documents, dashboard stats.
 - **Also**: analytics, contact messages, settings, audit log.
 - **Customer pages** at `/q/<code>` and `/b/<slug>`, built mobile-first and loaded with minimal JavaScript.
